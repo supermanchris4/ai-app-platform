@@ -1,0 +1,8 @@
+# Checks run on each developer's machine before every commit.
+# Install once per clone with: pre-commit install
+# Dependabot proposes updates to the pinned versions below.
+repos:
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      - id: gitleaks
