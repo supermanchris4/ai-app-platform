@@ -1,0 +1,22 @@
+# The pull request checks, required to pass before merge (the template's 13-delivery-pipeline.md).
+# Each package's checks join as the package is moved in. A check's name in the ruleset,
+# .github/rulesets/main.json, is "{job name} / {reusable workflow's job name}".
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions: {}
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  security:
+    name: Security
+    permissions:
+      contents: read
+    uses: ./.github/workflows/security-checks.yml

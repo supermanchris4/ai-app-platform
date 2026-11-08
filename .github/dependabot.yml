@@ -1,0 +1,18 @@
+# Dependabot proposes version updates as pull requests, which run the full CI checks before merge.
+# Each waits 7 days after a release before proposing it, so a malicious or broken release can be
+# withdrawn first; security updates are not delayed. Each package's ecosystem is added with the package.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+
+  - package-ecosystem: pre-commit
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7

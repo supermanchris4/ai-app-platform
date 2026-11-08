@@ -1,0 +1,94 @@
+# Secret, code and dependency scanning with open-source tools, run from their images pinned by
+# digest (specs/13-delivery-pipeline.md#pull-request-checks; delivery plan decision 6). Reusable: it
+# holds nothing of one application, and takes its values as inputs.
+name: Security checks
+
+on:
+  workflow_call:
+    inputs:
+      lockfiles:
+        description: The lock files to scan for known vulnerabilities, one per line, from the repository root; empty to skip
+        type: string
+        default: ""
+      semgrep-config:
+        description: The Semgrep rulesets, separated by spaces
+        type: string
+        default: p/default
+      gitleaks-image:
+        description: The gitleaks image, pinned by digest
+        type: string
+        default: ghcr.io/gitleaks/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f
+      semgrep-image:
+        description: The Semgrep image, pinned by digest
+        type: string
+        default: semgrep/semgrep:1.182.0@sha256:4a34048c04fef049f71665047f074cffb00cc3d89482f965a5cd151d589237af
+      osv-scanner-image:
+        description: The OSV-Scanner image, pinned by digest
+        type: string
+        default: ghcr.io/google/osv-scanner:v2.7.0@sha256:4f3b7e2c64b9d38a5febc5a7e4a3dfef1d1362f726dea7a2ef4762b46469fcd0
+
+permissions: {}
+
+jobs:
+  secrets:
+    name: Secrets
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      # The whole history, so a secret added and removed within a change is still found. Findings
+      # that are not secrets are listed by fingerprint in .gitleaksignore.
+      - name: gitleaks
+        env:
+          GITLEAKS_IMAGE: ${{ inputs.gitleaks-image }}
+        run: |
+          docker run --rm --volume "$PWD:/src:ro" "$GITLEAKS_IMAGE" \
+            git /src --redact --no-banner --exit-code 1
+
+  code:
+    name: Code
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # A finding that is not a risk is marked in the code with `nosemgrep` and the reason.
+      - name: Semgrep
+        env:
+          SEMGREP_IMAGE: ${{ inputs.semgrep-image }}
+          SEMGREP_CONFIG: ${{ inputs.semgrep-config }}
+        run: |
+          configs=()
+          for config in $SEMGREP_CONFIG; do configs+=(--config "$config"); done
+          docker run --rm --volume "$PWD:/src:ro" --workdir /src "$SEMGREP_IMAGE" \
+            semgrep scan "${configs[@]}" --metrics=off --error
+
+  dependencies:
+    name: Dependencies
+    if: inputs.lockfiles != ''
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: OSV-Scanner
+        env:
+          OSV_SCANNER_IMAGE: ${{ inputs.osv-scanner-image }}
+          LOCKFILES: ${{ inputs.lockfiles }}
+        run: |
+          args=()
+          while IFS= read -r lockfile; do
+            [ -n "$lockfile" ] && args+=(--lockfile "/src/$lockfile")
+          done <<< "$LOCKFILES"
+          docker run --rm --volume "$PWD:/src:ro" "$OSV_SCANNER_IMAGE" scan source "${args[@]}"
