@@ -18,9 +18,30 @@ The platform code every FastAPI application built from the AI application templa
 | `logging_config` | One JSON log formatter |
 | `testing` | `TestIssuer`, a key pair an application's tests sign tokens with |
 
+## Installing it
+
+Each release is a git tag, `api-v{version}`, on this public repository, so installing needs no credential. In the application's `pyproject.toml`:
+
+```toml
+[project]
+dependencies = ["ai-app-platform"]
+
+[tool.uv.sources]
+ai-app-platform = { git = "https://github.com/supermanchris4/ai-app-platform", tag = "api-v0.1.0", subdirectory = "packages/api" }
+```
+
+`uv lock` records the tag's commit, so development, the pull request checks and the image all install the same code. uv fetches git sources with `git`, so an image's build stage needs it installed. Where that is unwelcome, install the wheel attached to the release instead, which `uv lock` records with its hash:
+
+```toml
+[tool.uv.sources]
+ai-app-platform = { url = "https://github.com/supermanchris4/ai-app-platform/releases/download/api-v0.1.0/ai_app_platform-0.1.0-py3-none-any.whl" }
+```
+
+To upgrade, change the version in the tag (or the address), run `uv lock`, and read the [changelog](CHANGELOG.md).
+
 ## Using it
 
-How to install it at a version tag is added with the first release. An application then:
+An application:
 
 1. Declares its settings by extending `PlatformSettings`, and its models on `ai_app_platform.database.Base`.
 2. Creates its engine with `create_database_engine(settings)` and a session factory from it.

@@ -31,11 +31,11 @@ People are synthetic, never real. Their roles must be human roles. [`example-rol
 
 ## Using it
 
-The image is `ghcr.io/supermanchris4/ai-app-platform-mock-idp`. The tag to use is added with the first release. In an application's Compose file:
+The image is `ghcr.io/supermanchris4/ai-app-platform-mock-idp`, public, so it pulls with no credential. Each release is tagged with its version, such as `0.1.0`; the release notes give its digest, which an application pins as it pins every other image. In an application's Compose file:
 
 ```yaml
 mock-idp:
-  image: ghcr.io/supermanchris4/ai-app-platform-mock-idp:{version}
+  image: ghcr.io/supermanchris4/ai-app-platform-mock-idp:0.1.0@sha256:{digest from the release notes}
   ports:
     - "9000:9000"
   environment:
