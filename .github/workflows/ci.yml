@@ -20,3 +20,19 @@ jobs:
     permissions:
       contents: read
     uses: ./.github/workflows/security-checks.yml
+    with:
+      lockfiles: |
+        packages/api/uv.lock
+
+  api:
+    name: API platform
+    permissions:
+      contents: read
+    uses: ./.github/workflows/python-checks.yml
+    with:
+      working-directory: packages/api
+      # The coverage threshold is in pyproject.toml.
+      test-command: uv run pytest --cov --cov-report=term
+      postgres-image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+      postgres-setup-sql: packages/api/tests/database-users.sql
+      database-prefix: ci
