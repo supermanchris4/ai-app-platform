@@ -1,0 +1,90 @@
+# Checks a Python project managed by uv: Ruff lint and format check, Pyright, and its tests
+# (the template's 13-delivery-pipeline.md). Reusable: it holds nothing of one
+# application, and takes its values as inputs.
+#
+# With `postgres-image` set, a PostgreSQL container is started first and prepared by running
+# `postgres-setup-sql` as its superuser, and TEST_DATABASE_URL points the tests at
+# `{database-prefix}_test` as `{database-prefix}_migrator`.
+name: Python checks
+
+on:
+  workflow_call:
+    inputs:
+      working-directory:
+        description: The project directory, holding pyproject.toml and uv.lock
+        type: string
+        required: true
+      test-command:
+        description: The command that runs the tests, from the project directory
+        type: string
+        default: uv run pytest
+      postgres-image:
+        description: A PostgreSQL image, pinned by digest, to run the tests against; empty for none
+        type: string
+        default: ""
+      postgres-setup-sql:
+        description: A psql script, from the repository root, run as the superuser to create the users and test database
+        type: string
+        default: ""
+      database-prefix:
+        description: The prefix the setup script names the users and test database from
+        type: string
+        default: ci
+
+permissions: {}
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1
+        with:
+          working-directory: ${{ inputs.working-directory }}
+          enable-cache: true
+          cache-dependency-glob: ${{ inputs.working-directory }}/uv.lock
+
+      - name: Install from the lock file
+        run: uv sync --locked
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Pyright
+        run: uv run pyright
+
+      - name: Start PostgreSQL
+        if: inputs.postgres-image != ''
+        working-directory: .
+        env:
+          POSTGRES_IMAGE: ${{ inputs.postgres-image }}
+          SETUP_SQL: ${{ inputs.postgres-setup-sql }}
+          PREFIX: ${{ inputs.database-prefix }}
+        # Throwaway values for a container that lives only as long as this job.
+        run: |
+          docker run --detach --name postgres --publish 5432:5432 \
+            --env POSTGRES_PASSWORD=ci-only-throwaway --env POSTGRES_DB="$PREFIX" \
+            --health-cmd "pg_isready -U postgres" --health-interval 2s --health-retries 30 \
+            "$POSTGRES_IMAGE"
+          until [ "$(docker inspect --format '{{.State.Health.Status}}' postgres)" = healthy ]; do sleep 2; done
+          docker exec --interactive postgres psql --username postgres --dbname "$PREFIX" \
+            --set prefix="$PREFIX" --set migrator_password=ci-only-throwaway \
+            --set runtime_password=ci-only-throwaway < "$SETUP_SQL"
+          echo "TEST_DATABASE_URL=postgresql+psycopg://${PREFIX}_migrator:ci-only-throwaway@localhost:5432/${PREFIX}_test" >> "$GITHUB_ENV"
+
+      - name: Tests
+        env:
+          TEST_COMMAND: ${{ inputs.test-command }}
+        run: bash -c "$TEST_COMMAND"

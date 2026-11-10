@@ -30,7 +30,9 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           { "context": "Security / Secrets", "integration_id": 15368 },
-          { "context": "Security / Code", "integration_id": 15368 }
+          { "context": "Security / Code", "integration_id": 15368 },
+          { "context": "Security / Dependencies", "integration_id": 15368 },
+          { "context": "API platform / Checks", "integration_id": 15368 }
         ]
       }
     }
