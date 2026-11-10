@@ -2,7 +2,7 @@
 # Published as ghcr.io/supermanchris4/ai-app-platform-mock-idp; each application mounts its roles and
 # people file and sets MOCK_IDP_CONFIG to it (README).
 
-FROM ghcr.io/astral-sh/uv:0.13.0@sha256:cdc6093146eb3ff6a40107b38f008b789e050e77ad87865e381d9917da55a168 AS uv
+FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
 
 FROM python:3.13-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72 AS build
 COPY --from=uv /uv /usr/local/bin/uv
