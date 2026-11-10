@@ -12,9 +12,24 @@ Applications install the packages by version tag. The code was built first insid
 | Web platform | `packages/web` | The web shell's platform code for a React application: the API client (CSRF token and correlation ID on every request), the session provider and route guard, sign-in navigation, the error notice, the environment banner, `config.json`, local dates and navigation links | `@supermanchris4/ai-app-platform-web` in GitHub Packages, tag `web-v{version}` |
 | Mock identity provider | `packages/mock-idp` | A local OpenID Connect provider standing in for the internal issuer, configured with each application's roles and synthetic people | `ghcr.io/supermanchris4/ai-app-platform-mock-idp`, tag `mock-idp-v{version}` |
 
-Each package implements the template specifications it names, and its tests show they are met. Being moved in now; how to install each is added with the first release.
+Each package implements the template specifications it names, and its tests show they are met. Each package's README says how to install it, and its CHANGELOG what each version changed.
 
 Terraform modules and reusable workflows join later (the standard's Feature F03.3).
+
+## Releasing
+
+A package is released by pushing its version tag from `main`, which runs [`release.yml`](.github/workflows/release.yml):
+
+1. In a pull request, set the package's new version (`pyproject.toml` or `package.json`) and add its entry to the package's `CHANGELOG.md`. A change an application would notice is noted there; a breaking change is a new major version.
+2. Once it is merged, tag the merge commit and push the tag:
+
+   ```bash
+   git switch main && git pull
+   git tag api-v0.2.0   # or web-v… or mock-idp-v…
+   git push origin api-v0.2.0
+   ```
+
+The workflow refuses a tag whose version differs from the package's, which is not on `main`, or which has no changelog entry. It runs the package's checks again, publishes it, and creates the GitHub release.
 
 ## Contributing
 

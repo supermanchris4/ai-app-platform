@@ -1,0 +1,220 @@
+# Releases one package when its version tag is pushed: api-v{version}, web-v{version} or
+# mock-idp-v{version} (README, "Releasing"). The tag must name a commit on main and the version the
+# package declares; the package's checks run again on the tagged commit before anything is published.
+#
+# - API platform: installed by uv from the tag; its wheel and source are attached to the release.
+# - Web platform: published to GitHub Packages as @supermanchris4/ai-app-platform-web.
+# - Mock identity provider: built, scanned with Trivy, and pushed to GitHub Container Registry.
+#
+# Each publishes with this run's own token; no secret is stored.
+name: Release
+
+on:
+  push:
+    tags:
+      - "api-v*"
+      - "web-v*"
+      - "mock-idp-v*"
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      package: ${{ steps.match.outputs.package }}
+      version: ${{ steps.match.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Match the tag to main and to the package's version
+        id: match
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          declared() { python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])' "$1"; }
+          case "$TAG" in
+            api-v*) package=api; version="${TAG#api-v}"; expected=$(declared packages/api/pyproject.toml) ;;
+            web-v*) package=web; version="${TAG#web-v}"; expected=$(node -p 'require("./packages/web/package.json").version') ;;
+            mock-idp-v*) package=mock-idp; version="${TAG#mock-idp-v}"; expected=$(declared packages/mock-idp/pyproject.toml) ;;
+            *) echo "::error::$TAG is not a release tag"; exit 1 ;;
+          esac
+          if [ "$version" != "$expected" ]; then
+            echo "::error::$TAG names version $version, but packages/$package declares $expected"
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "::error::$TAG names a commit that is not on main"
+            exit 1
+          fi
+          if ! grep -q "^## $version\b" "packages/$package/CHANGELOG.md"; then
+            echo "::error::packages/$package/CHANGELOG.md has no entry for $version"
+            exit 1
+          fi
+          echo "package=$package" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  api-checks:
+    name: API platform
+    needs: version
+    if: needs.version.outputs.package == 'api'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/python-checks.yml
+    with:
+      working-directory: packages/api
+      test-command: uv run pytest --cov --cov-report=term
+      postgres-image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
+      postgres-setup-sql: packages/api/tests/database-users.sql
+      database-prefix: ci
+
+  api-release:
+    name: Release the API platform
+    needs: [version, api-checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    defaults:
+      run:
+        working-directory: packages/api
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - name: Build the wheel and source
+        run: uv build --out-dir dist
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$TAG" dist/* --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "API platform $VERSION" \
+            --notes "See [packages/api/CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/api/CHANGELOG.md) and [how to install it](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/api/README.md#installing-it)."
+
+  web-checks:
+    name: Web platform
+    needs: version
+    if: needs.version.outputs.package == 'web'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/web-checks.yml
+    with:
+      working-directory: packages/web
+
+  web-release:
+    name: Release the web platform
+    needs: [version, web-checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    defaults:
+      run:
+        working-directory: packages/web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: packages/web/.nvmrc
+          registry-url: https://npm.pkg.github.com
+          scope: "@supermanchris4"
+
+      - name: Install from the lock file
+        run: npm ci --ignore-scripts
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to GitHub Packages
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: npm publish --ignore-scripts
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Web platform $VERSION" \
+            --notes "Published as \`@supermanchris4/ai-app-platform-web@$VERSION\` in GitHub Packages. See [packages/web/CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/web/CHANGELOG.md) and [how to install it](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/web/README.md#installing-it)."
+
+  mock-idp-checks:
+    name: Mock identity provider
+    needs: version
+    if: needs.version.outputs.package == 'mock-idp'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/python-checks.yml
+    with:
+      working-directory: packages/mock-idp
+
+  mock-idp-release:
+    name: Release the mock identity provider
+    needs: [version, mock-idp-checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: write
+    env:
+      IMAGE: ghcr.io/supermanchris4/ai-app-platform-mock-idp
+      # Trivy 0.76.1, as in image-checks.yml.
+      TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: docker build --tag "$IMAGE:$VERSION" packages/mock-idp
+
+      - name: Scan
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          docker run --rm --volume /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+            image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE:$VERSION"
+
+      - name: Push to GitHub Container Registry
+        id: push
+        env:
+          TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          echo "$TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          docker push "$IMAGE:$VERSION"
+          docker logout ghcr.io
+          echo "digest=$(docker inspect --format '{{index .RepoDigests 0}}' "$IMAGE:$VERSION")" >> "$GITHUB_OUTPUT"
+
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Mock identity provider $VERSION" \
+            --notes "Published as \`$IMAGE:$VERSION\`, digest \`$DIGEST\`. See [packages/mock-idp/CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/mock-idp/CHANGELOG.md) and [how to use it](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/mock-idp/README.md#using-it)."

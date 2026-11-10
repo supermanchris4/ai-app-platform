@@ -15,9 +15,46 @@ The platform code every React web interface built from the AI application templa
 
 React and React Router are peer dependencies: the application provides them, so both share one copy.
 
+## Installing it
+
+The package is in GitHub Packages, whose npm registry needs a token to read even a public package. No token is ever written into the application's repository.
+
+1. In the application's web folder, an `.npmrc` that says where the scope's packages come from:
+
+   ```ini
+   @supermanchris4:registry=https://npm.pkg.github.com
+   ```
+
+2. Then `npm install @supermanchris4/ai-app-platform-web@0.1.0 react react-router`.
+
+**On a developer's machine,** sign in to the registry once with a personal access token (classic) that has only the `read:packages` scope. npm stores it in the user's own `~/.npmrc`, outside the repository:
+
+```bash
+npm login --scope=@supermanchris4 --auth-type=legacy --registry=https://npm.pkg.github.com
+```
+
+**In the application's pipelines,** the run's own token reads the package. The job needs `packages: read`, and `actions/setup-node` writes the registry setting:
+
+```yaml
+permissions:
+  contents: read
+  packages: read
+steps:
+  - uses: actions/setup-node@... # pinned
+    with:
+      node-version-file: apps/web/.nvmrc
+      registry-url: https://npm.pkg.github.com
+      scope: "@supermanchris4"
+  - run: npm ci
+    env:
+      NODE_AUTH_TOKEN: ${{ github.token }}
+```
+
+If the package is private, the application's repository also needs read access in the package's settings, under "Manage Actions access". To upgrade, install the new version and read the [changelog](CHANGELOG.md).
+
 ## Using it
 
-How to install it at a version is added with the first release. An application then:
+An application:
 
 1. Wraps its routes in `SessionProvider`, and shows `EnvironmentBanner` with the environment from `loadConfig()`.
 2. Calls the API through `platformFetch` or `apiRequest`, never `fetch` directly.
