@@ -68,3 +68,8 @@ def test_the_package_imports_itself_by_name() -> None:
         if isinstance(node, ast.ImportFrom) and node.level
     ]
     assert not relative
+
+
+def test_the_package_is_marked_as_typed() -> None:
+    """Without py.typed, type checkers treat the installed package as untyped (PEP 561)."""
+    assert (SOURCE / "py.typed").is_file()
