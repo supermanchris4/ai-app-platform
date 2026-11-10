@@ -24,6 +24,7 @@ jobs:
       lockfiles: |
         packages/api/uv.lock
         packages/web/package-lock.json
+        packages/mock-idp/uv.lock
 
   api:
     name: API platform
@@ -45,3 +46,20 @@ jobs:
     uses: ./.github/workflows/web-checks.yml
     with:
       working-directory: packages/web
+
+  mock-idp:
+    name: Mock identity provider
+    permissions:
+      contents: read
+    uses: ./.github/workflows/python-checks.yml
+    with:
+      working-directory: packages/mock-idp
+
+  mock-idp-image:
+    name: Mock identity provider image
+    permissions:
+      contents: read
+    uses: ./.github/workflows/image-checks.yml
+    with:
+      context: packages/mock-idp
+      dockerfile: packages/mock-idp/Dockerfile
