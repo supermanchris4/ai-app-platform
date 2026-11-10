@@ -1,0 +1,52 @@
+# Builds a container image and, when asked, scans it with Trivy, failing on high or critical
+# vulnerabilities that have a fix (the template's 13-delivery-pipeline.md). Reusable: it
+# holds nothing of one application, and takes its values as inputs. Nothing is pushed.
+name: Image checks
+
+on:
+  workflow_call:
+    inputs:
+      context:
+        description: The build context, from the repository root
+        type: string
+        default: .
+      dockerfile:
+        description: The Dockerfile, from the repository root
+        type: string
+        required: true
+      scan:
+        description: Whether to scan the built image
+        type: boolean
+        default: true
+      trivy-image:
+        description: The Trivy image, pinned by digest
+        type: string
+        # Trivy 0.76.1. Run from its image rather than an action: the action's tags were hijacked in 2026.
+        default: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+permissions: {}
+
+jobs:
+  image:
+    name: Build and scan
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Build
+        env:
+          CONTEXT: ${{ inputs.context }}
+          DOCKERFILE: ${{ inputs.dockerfile }}
+        run: docker build --file "$DOCKERFILE" --tag image-under-check:ci "$CONTEXT"
+
+      - name: Scan
+        if: inputs.scan
+        env:
+          TRIVY_IMAGE: ${{ inputs.trivy-image }}
+        run: |
+          docker run --rm --volume /var/run/docker.sock:/var/run/docker.sock "$TRIVY_IMAGE" \
+            image --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 image-under-check:ci

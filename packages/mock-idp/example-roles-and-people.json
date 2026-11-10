@@ -1,0 +1,9 @@
+{
+  "human_roles": ["editor.write", "admin.write"],
+  "system_roles": ["system.read", "system.write"],
+  "people": [
+    { "oid": "00000000-0000-4000-8000-000000000001", "name": "Eddie Editor", "roles": ["editor.write"] },
+    { "oid": "00000000-0000-4000-8000-000000000002", "name": "Alex Administrator", "roles": ["admin.write"] },
+    { "oid": "00000000-0000-4000-8000-000000000003", "name": "Robin Noroles", "roles": [] }
+  ]
+}
