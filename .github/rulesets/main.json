@@ -32,7 +32,8 @@
           { "context": "Security / Secrets", "integration_id": 15368 },
           { "context": "Security / Code", "integration_id": 15368 },
           { "context": "Security / Dependencies", "integration_id": 15368 },
-          { "context": "API platform / Checks", "integration_id": 15368 }
+          { "context": "API platform / Checks", "integration_id": 15368 },
+          { "context": "Web platform / Checks", "integration_id": 15368 }
         ]
       }
     }

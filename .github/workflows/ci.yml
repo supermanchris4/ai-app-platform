@@ -23,6 +23,7 @@ jobs:
     with:
       lockfiles: |
         packages/api/uv.lock
+        packages/web/package-lock.json
 
   api:
     name: API platform
@@ -36,3 +37,11 @@ jobs:
       postgres-image: postgres:17@sha256:31ba9c94a03ada9988f2bb493a22a75eef3a185884533e5cdbcd498ea835b08f
       postgres-setup-sql: packages/api/tests/database-users.sql
       database-prefix: ci
+
+  web:
+    name: Web platform
+    permissions:
+      contents: read
+    uses: ./.github/workflows/web-checks.yml
+    with:
+      working-directory: packages/web
