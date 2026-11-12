@@ -27,17 +27,14 @@ Each release is a git tag, `api-v{version}`, on this public repository, so insta
 dependencies = ["ai-app-platform"]
 
 [tool.uv.sources]
-ai-app-platform = { git = "https://github.com/supermanchris4/ai-app-platform", tag = "api-v0.1.0", subdirectory = "packages/api" }
+ai-app-platform = { git = "https://github.com/supermanchris4/ai-app-platform", tag = "api-v0.1.1", subdirectory = "packages/api" }
 ```
 
-`uv lock` records the tag's commit, so development, the pull request checks and the image all install the same code. uv fetches git sources with `git`, so an image's build stage needs it installed. Where that is unwelcome, install the wheel attached to the release instead, which `uv lock` records with its hash:
+`uv lock` records the tag's commit, so development, the pull request checks and the image all install the same code. uv fetches git sources with `git`, so an image's build stage installs it; the runtime stage, which copies only the virtual environment, does not need it.
 
-```toml
-[tool.uv.sources]
-ai-app-platform = { url = "https://github.com/supermanchris4/ai-app-platform/releases/download/api-v0.1.0/ai_app_platform-0.1.0-py3-none-any.whl" }
-```
+Install from the tag, not from the wheel attached to the release. Dependabot checks a URL source's download link before updating, and GitHub's signed link for a release file refuses that check, so with the wheel URL Dependabot updates none of the application's Python dependencies.
 
-To upgrade, change the version in the tag (or the address), run `uv lock`, and read the [changelog](CHANGELOG.md).
+To upgrade, change the version in the tag, run `uv lock`, and read the [changelog](CHANGELOG.md).
 
 ## Using it
 
