@@ -2,6 +2,10 @@
 
 Each version's changes to the reusable workflows that an application would notice. A breaking change is a new major version.
 
+## 0.3.1
+
+- `terraform-checks` reuses the provider it downloaded first for every configuration, including modules without a lock file, instead of downloading it again for each one. A root configuration's committed lock file is still checked.
+
 ## 0.3.0
 
 - `traceability-check` is new: it runs the API platform package's traceability module (API package 0.2.0 or later) and fails on a cited ID that is not a requirement, a test that names none, or a trace report that is not current.

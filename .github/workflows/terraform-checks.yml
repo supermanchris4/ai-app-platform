@@ -59,9 +59,14 @@ jobs:
           CONFIGURATIONS: ${{ inputs.configurations }}
         run: |
           mkdir -p "$RUNNER_TEMP/plugins"
+          # Every configuration shares one provider cache. Terraform uses a cached provider only where a
+          # lock file already records it, unless told otherwise; the modules have no lock file, and the
+          # one init writes here is discarded, so the cache may serve them. A root configuration's
+          # committed lock file is still checked (-lockfile=readonly).
           terraform() {
             docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
-              --env TF_PLUGIN_CACHE_DIR=/plugins --volume "$RUNNER_TEMP/plugins:/plugins" \
+              --env TF_PLUGIN_CACHE_DIR=/plugins --env TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE=true \
+              --volume "$RUNNER_TEMP/plugins:/plugins" \
               --volume "$PWD:/work" --workdir /work "$TERRAFORM_IMAGE" "$@"
           }
           while IFS= read -r pattern; do
