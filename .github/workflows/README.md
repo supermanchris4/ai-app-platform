@@ -33,6 +33,14 @@ Use the line ending `^{}` if there is one (an annotated tag), and otherwise the 
 
 To upgrade, read the [changelog](CHANGELOG.md) from the current version to the new one, since a major version can need a further permission, input or Terraform output, then change the SHA and the comment in every call together.
 
+### GitHub Environments
+
+A job that calls a reusable workflow cannot name a GitHub Environment itself, so `terraform-plan`, `terraform-apply`, `build-application` and `deploy-application` take it as the `github-environment` input, and run their job in it. Leave it empty, as by default, where the repository has no environments (on a private repository under GitHub Free, for example).
+
+- **Protection rules.** A job in an environment waits for its required reviewers and is refused on a branch the environment does not allow. A plan on a pull request is usually run with no environment, so that it does not wait for approval.
+- **The role's trust.** In an environment, the OIDC token's subject names the environment instead of the branch, so a role that trusts an environment is assumed only with `github-environment` set to it, and a role that trusts a branch only with it empty.
+- **Variables.** The calling job has no environment, so its `with:` values cannot read an environment's variables. Pass repository variables, named for the environment where they differ, such as `vars.TEST_DEPLOY_ROLE_ARN`.
+
 ## Workflows
 
 | Workflow | What it does |
@@ -150,6 +158,7 @@ Plans a Terraform configuration for one environment with a read-only role, and p
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `environment` | Yes |  | The environment planned, for the plan's heading |
+| `github-environment` | No |  | The GitHub Environment the job runs in, for its protection rules and the role's OIDC trust; empty for none, on a plan without environments |
 | `working-directory` | Yes |  | The root Terraform configuration |
 | `aws-region` | Yes |  | The region of the state bucket and the deployment |
 | `role-arn` | Yes |  | The read-only role to assume through OIDC |
@@ -168,6 +177,7 @@ Applies a Terraform configuration to one environment with the deploy role (the t
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `environment` | Yes |  | The environment applied to |
+| `github-environment` | No |  | The GitHub Environment the job runs in, for its protection rules and the role's OIDC trust; empty for none, on a plan without environments |
 | `working-directory` | Yes |  | The root Terraform configuration |
 | `aws-region` | Yes |  | The region of the state bucket and the deployment |
 | `role-arn` | Yes |  | The deploy role to assume through OIDC |
@@ -187,6 +197,7 @@ Builds the application once (the template's 13-delivery-pipeline.md): the API im
 |---|---|---|---|
 | `github-packages-scope` | No |  | An npm scope whose packages come from GitHub Packages, such as "@example", read with the run's own token; empty for none |
 | `environment` | Yes |  | The environment whose image repository receives the build |
+| `github-environment` | No |  | The GitHub Environment the job runs in, for its protection rules and the role's OIDC trust; empty for none, on a plan without environments |
 | `infra-directory` | Yes |  | The root Terraform configuration, whose ecr_repository_url output names the repository |
 | `aws-region` | Yes |  | The environment's region |
 | `role-arn` | Yes |  | The deploy role to assume through OIDC |
@@ -211,6 +222,7 @@ Deploys a build to one environment (the template's 13-delivery-pipeline.md): cop
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `environment` | Yes |  | The environment deployed to |
+| `github-environment` | No |  | The GitHub Environment the job runs in, for its protection rules and the role's OIDC trust; empty for none, on a plan without environments |
 | `infra-directory` | Yes |  | The root Terraform configuration, whose outputs name the environment's resources |
 | `aws-region` | Yes |  | The environment's region |
 | `role-arn` | Yes |  | The deploy role to assume through OIDC |

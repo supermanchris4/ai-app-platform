@@ -16,6 +16,10 @@ on:
         description: The environment whose image repository receives the build
         type: string
         required: true
+      github-environment:
+        description: The GitHub Environment the job runs in, for its protection rules and the role's OIDC trust; empty for none, on a plan without environments
+        type: string
+        default: ""
       infra-directory:
         description: The root Terraform configuration, whose ecr_repository_url output names the repository
         type: string
@@ -63,6 +67,7 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-24.04
+    environment: ${{ inputs.github-environment }}
     permissions:
       contents: read
       id-token: write
