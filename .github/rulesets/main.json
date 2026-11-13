@@ -35,7 +35,8 @@
           { "context": "API platform / Checks", "integration_id": 15368 },
           { "context": "Web platform / Checks", "integration_id": 15368 },
           { "context": "Mock identity provider / Checks", "integration_id": 15368 },
-          { "context": "Mock identity provider image / Build and scan", "integration_id": 15368 }
+          { "context": "Mock identity provider image / Build and scan", "integration_id": 15368 },
+          { "context": "Terraform modules / Checks", "integration_id": 15368 }
         ]
       }
     }

@@ -32,3 +32,6 @@ coverage/
 *.tfstate.*
 *.tfplan
 *.tfvars
+
+# Terraform modules keep no lock file; each application root keeps its own
+packages/terraform/**/.terraform.lock.hcl

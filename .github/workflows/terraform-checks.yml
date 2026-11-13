@@ -1,0 +1,92 @@
+# Checks Terraform: format, validation and tests with mocked providers for each configuration, then
+# Trivy's misconfiguration scan (the template's 13-delivery-pipeline.md). Nothing is
+# planned against or applied to an AWS account, and no credentials are used. Reusable: it holds
+# nothing of one application, and takes its values as inputs.
+name: Terraform checks
+
+on:
+  workflow_call:
+    inputs:
+      root:
+        description: The directory holding all the Terraform, checked for format recursively
+        type: string
+        required: true
+      configurations:
+        description: The configurations and modules to validate and test, one per line; shell globs are expanded
+        type: string
+        required: true
+      scan-path:
+        description: The directory Trivy scans for misconfigurations
+        type: string
+        default: .
+      scan-skip-dirs:
+        description: Directories Trivy skips, one per line, from scan-path
+        type: string
+        default: ""
+      terraform-image:
+        description: The Terraform image, pinned by digest
+        type: string
+        default: hashicorp/terraform:1.16.7@sha256:c9c77f5b9820832cbc7b88d16df406ac6e75fee5a9077e5437db0c54e5ff33e3
+      trivy-image:
+        description: The Trivy image, pinned by digest
+        type: string
+        default: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
+
+permissions: {}
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Format
+        env:
+          TERRAFORM_IMAGE: ${{ inputs.terraform-image }}
+          ROOT: ${{ inputs.root }}
+        run: |
+          docker run --rm --user "$(id -u):$(id -g)" --volume "$PWD:/work" --workdir /work \
+            "$TERRAFORM_IMAGE" fmt -check -recursive -diff "$ROOT"
+
+      - name: Validate and test
+        env:
+          TERRAFORM_IMAGE: ${{ inputs.terraform-image }}
+          CONFIGURATIONS: ${{ inputs.configurations }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/plugins"
+          terraform() {
+            docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp \
+              --env TF_PLUGIN_CACHE_DIR=/plugins --volume "$RUNNER_TEMP/plugins:/plugins" \
+              --volume "$PWD:/work" --workdir /work "$TERRAFORM_IMAGE" "$@"
+          }
+          while IFS= read -r pattern; do
+            [ -n "$pattern" ] || continue
+            for dir in $pattern; do
+              echo "::group::$dir"
+              # A root configuration's lock file must already match; a module has none.
+              lockfile=()
+              if [ -f "$dir/.terraform.lock.hcl" ]; then lockfile=(-lockfile=readonly); fi
+              terraform -chdir="$dir" init -backend=false -input=false "${lockfile[@]}"
+              terraform -chdir="$dir" validate
+              if [ -d "$dir/tests" ]; then terraform -chdir="$dir" test; fi
+              echo "::endgroup::"
+            done
+          done <<< "$CONFIGURATIONS"
+
+      - name: Misconfiguration scan
+        env:
+          TRIVY_IMAGE: ${{ inputs.trivy-image }}
+          SCAN_PATH: ${{ inputs.scan-path }}
+          SKIP_DIRS: ${{ inputs.scan-skip-dirs }}
+        run: |
+          args=()
+          while IFS= read -r dir; do
+            [ -n "$dir" ] && args+=(--skip-dirs "/src/$dir")
+          done <<< "$SKIP_DIRS"
+          docker run --rm --volume "$PWD/$SCAN_PATH:/src:ro" "$TRIVY_IMAGE" \
+            config --exit-code 1 "${args[@]}" /src
