@@ -1,5 +1,5 @@
 // The web platform's public interface: what an application imports from
-// @supermanchris4/ai-app-platform-web. Anything not exported here may change without a new version.
+// this package. Anything not exported here may change without a new version.
 export { ApiError, apiRequest, platformFetch, setCsrfToken } from "./api-client";
 export { loadConfig, type AppConfig } from "./config";
 export { EnvironmentBanner } from "./environment-banner";
