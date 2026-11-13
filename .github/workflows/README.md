@@ -19,7 +19,17 @@ jobs:
       working-directory: apps/api
 ```
 
-A reusable workflow's jobs can have no more permission than its caller grants, so the calling job grants at least the permissions each workflow lists below. How to take a release is added with the first release.
+A reusable workflow's jobs can have no more permission than its caller grants, so the calling job grants at least the permissions each workflow lists below.
+
+Each release is a git tag, `workflows-v{version}`, and its GitHub release names the commit the tag points to. Every call in an application uses the same release. Take the commit from the release's notes, or from this repository:
+
+```bash
+git ls-remote https://github.com/supermanchris4/ai-app-platform 'refs/tags/workflows-v0.1.0^{}' refs/tags/workflows-v0.1.0
+```
+
+Use the line ending `^{}` if there is one (an annotated tag), and otherwise the other line. Never take a commit from a link, a pull request or a fork: GitHub serves a commit pushed to any fork of a public repository through this repository's address too, so only the release tag shows that a commit is a release.
+
+To upgrade, read the [changelog](CHANGELOG.md) from the current version to the new one, since a major version can need a further permission, input or Terraform output, then change the SHA and the comment in every call together.
 
 ## Workflows
 

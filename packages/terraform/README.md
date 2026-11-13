@@ -2,16 +2,30 @@
 
 The Terraform modules an application's infrastructure is built from, one per concern in the template's `12-aws-deployment.md`. An application's own Terraform roots (its deployed environment and its account bootstrap) compose them, and hold only what is the application's own: its names, its settings and any resource no other application needs.
 
-Each module is used by its git source at a release tag, so every environment is built from the same, tested module code:
+The modules need Terraform 1.16 or later and the AWS provider 6.70 or later; the application's root pins the exact versions in its lock file.
+
+## Using a module
+
+Each release is a git tag, `terraform-v{version}`, on this public repository, so Terraform fetches a module with no credential. The application's root names each module by its git source at the commit the release tag names, with the tag in a comment, as for the reusable workflows and every action:
 
 ```hcl
 module "database" {
-  source = "git::https://github.com/supermanchris4/ai-app-platform.git//packages/terraform/modules/rds-postgres?ref=terraform-v{version}"
+  source = "git::https://github.com/supermanchris4/ai-app-platform.git//packages/terraform/modules/rds-postgres?ref={commit SHA}" # terraform-v{version}
   # ...
 }
 ```
 
-How to take a release is added with the first release. The modules need Terraform 1.16 or later and the AWS provider 6.70 or later; the application's root pins the exact versions in its lock file.
+Terraform's lock file records providers, not modules, so the `ref` alone fixes the module code. This repository's tag ruleset and release immutability stop a release tag being moved, but a commit SHA does not rely on this repository's settings at all, and is what supply-chain scanners expect. Every module in a root uses the same release.
+
+Take the commit from the release's notes, or from this repository:
+
+```bash
+git ls-remote https://github.com/supermanchris4/ai-app-platform 'refs/tags/terraform-v0.1.0^{}' refs/tags/terraform-v0.1.0
+```
+
+Use the line ending `^{}` if there is one (an annotated tag), and otherwise the other line. Never take a commit from a link, a pull request or a fork: GitHub serves a commit pushed to any fork of a public repository through this repository's address too, so only the release tag shows that a commit is a release.
+
+To upgrade, read the [changelog](CHANGELOG.md) from the current version to the new one, change the commit and the comment in every `source`, run `terraform init`, and check the plan in the pull request. A major version notes what an application changes and any resource the plan replaces.
 
 ## Modules
 
