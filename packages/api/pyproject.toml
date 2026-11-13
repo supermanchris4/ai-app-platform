@@ -1,6 +1,6 @@
 [project]
 name = "ai-app-platform"
-version = "0.1.1"
+version = "0.2.0"
 description = "The API platform for applications built from the AI application template: settings, logging, database access, middleware, authentication, sign-in, audit and error handling for FastAPI"
 readme = "README.md"
 license = "Apache-2.0"
