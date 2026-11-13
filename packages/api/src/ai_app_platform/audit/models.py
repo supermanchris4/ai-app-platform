@@ -42,6 +42,10 @@ class AuditRecord(Base):
     after_state: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     audit_metadata: Mapped[dict[str, Any] | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    # Equal to created_at, since the runtime user cannot change an audit record; held as every table holds it.
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now()
+    )
 
     __table_args__ = (
         Index("ix_audit_records_entity", "entity_type", "entity_id"),

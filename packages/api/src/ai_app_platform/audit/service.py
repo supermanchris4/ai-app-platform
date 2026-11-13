@@ -59,6 +59,7 @@ class AuditService:
         """
         caller = session.info.get(CALLER_KEY)
         actor_name = caller.display_name if isinstance(caller, AuthContext) and caller.subject == actor_id else None
+        now = datetime.now(UTC)
         audit_record = AuditRecord(
             entity_type=entity_type,
             entity_id=entity_id,
@@ -72,7 +73,8 @@ class AuditService:
             before_state=before_state,
             after_state=after_state,
             audit_metadata=metadata,
-            created_at=datetime.now(UTC),
+            created_at=now,
+            updated_at=now,
         )
         session.add(audit_record)
         return audit_record
