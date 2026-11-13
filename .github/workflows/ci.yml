@@ -43,6 +43,7 @@ jobs:
     name: Web platform
     permissions:
       contents: read
+      packages: read
     uses: ./.github/workflows/web-checks.yml
     with:
       working-directory: packages/web
@@ -74,3 +75,9 @@ jobs:
       configurations: |
         packages/terraform/modules/*
       scan-path: packages/terraform
+
+  workflows:
+    name: Workflows
+    permissions:
+      contents: read
+    uses: ./.github/workflows/workflow-checks.yml

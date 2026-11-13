@@ -1,0 +1,103 @@
+# Plans a Terraform configuration for one environment with a read-only role, and posts the plan to
+# the pull request (the template's 13-delivery-pipeline.md). The state lock is not taken, so the
+# role needs only to read. Reusable: it holds nothing of one application, and takes its values as inputs.
+name: Terraform plan
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: The environment planned, for the plan's heading
+        type: string
+        required: true
+      working-directory:
+        description: The root Terraform configuration
+        type: string
+        required: true
+      aws-region:
+        description: The region of the state bucket and the deployment
+        type: string
+        required: true
+      role-arn:
+        description: The read-only role to assume through OIDC
+        type: string
+        required: true
+      state-bucket:
+        description: The Terraform state bucket
+        type: string
+        required: true
+      state-key:
+        description: The environment's state file in the bucket
+        type: string
+        required: true
+      tfvars-json:
+        description: The environment's Terraform inputs, as JSON; none is secret
+        type: string
+        required: true
+      terraform-image:
+        description: The Terraform image, pinned by digest
+        type: string
+        default: hashicorp/terraform:1.16.7@sha256:c9c77f5b9820832cbc7b88d16df406ac6e75fee5a9077e5437db0c54e5ff33e3
+
+permissions: {}
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ inputs.role-arn }}
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: plan-${{ inputs.environment }}-${{ github.run_id }}
+
+      - name: Plan
+        env:
+          TERRAFORM_IMAGE: ${{ inputs.terraform-image }}
+          WORKING_DIRECTORY: ${{ inputs.working-directory }}
+          STATE_BUCKET: ${{ inputs.state-bucket }}
+          STATE_KEY: ${{ inputs.state-key }}
+          AWS_REGION_NAME: ${{ inputs.aws-region }}
+          TFVARS_JSON: ${{ inputs.tfvars-json }}
+        run: |
+          printf '%s' "$TFVARS_JSON" > "$RUNNER_TEMP/environment.tfvars.json"
+          mkdir -p "$RUNNER_TEMP/plugins"
+          terraform() {
+            docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp --env TF_IN_AUTOMATION=1 \
+              --env TF_PLUGIN_CACHE_DIR=/plugins --volume "$RUNNER_TEMP/plugins:/plugins" \
+              --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN --env AWS_REGION \
+              --volume "$PWD:/work" --volume "$RUNNER_TEMP:$RUNNER_TEMP" \
+              --workdir "/work/$WORKING_DIRECTORY" "$TERRAFORM_IMAGE" "$@"
+          }
+          terraform init -input=false -lockfile=readonly \
+            -backend-config="bucket=$STATE_BUCKET" -backend-config="key=$STATE_KEY" \
+            -backend-config="region=$AWS_REGION_NAME"
+          terraform plan -input=false -lock=false -no-color \
+            -var-file="$RUNNER_TEMP/environment.tfvars.json" -out="$RUNNER_TEMP/plan.tfplan"
+          terraform show -no-color "$RUNNER_TEMP/plan.tfplan" > "$RUNNER_TEMP/plan.txt"
+
+      - name: Post the plan
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ENVIRONMENT: ${{ inputs.environment }}
+          PULL_REQUEST: ${{ github.event.pull_request.number }}
+        run: |
+          {
+            echo "### Terraform plan: \`$ENVIRONMENT\`"
+            echo
+            echo '```'
+            head -c 60000 "$RUNNER_TEMP/plan.txt"
+            echo '```'
+          } > "$RUNNER_TEMP/comment.md"
+          cat "$RUNNER_TEMP/comment.md" >> "$GITHUB_STEP_SUMMARY"
+          gh pr comment "$PULL_REQUEST" --repo "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"

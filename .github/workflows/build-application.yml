@@ -1,0 +1,152 @@
+# Builds the application once (the template's 13-delivery-pipeline.md): the API image,
+# tagged with the commit SHA and pushed to the first environment's repository, and the web build. Both
+# are kept as one artifact, "release", which every later deployment of this build uses: the web build,
+# and image.txt naming the image by digest. Reusable: it holds nothing of one application, and takes
+# its values as inputs.
+name: Build application
+
+on:
+  workflow_call:
+    inputs:
+      github-packages-scope:
+        description: An npm scope whose packages come from GitHub Packages, such as "@supermanchris4", read with the run's own token; empty for none
+        type: string
+        default: ""
+      environment:
+        description: The environment whose image repository receives the build
+        type: string
+        required: true
+      infra-directory:
+        description: The root Terraform configuration, whose ecr_repository_url output names the repository
+        type: string
+        required: true
+      aws-region:
+        description: The environment's region
+        type: string
+        required: true
+      role-arn:
+        description: The deploy role to assume through OIDC
+        type: string
+        required: true
+      state-bucket:
+        description: The Terraform state bucket
+        type: string
+        required: true
+      state-key:
+        description: The environment's state file in the bucket
+        type: string
+        required: true
+      api-context:
+        description: The API image's build context
+        type: string
+        default: .
+      api-dockerfile:
+        description: The API image's Dockerfile
+        type: string
+        required: true
+      web-directory:
+        description: The web interface, built with npm run build into dist/
+        type: string
+        required: true
+      terraform-image:
+        description: The Terraform image, pinned by digest
+        type: string
+        default: hashicorp/terraform:1.16.7@sha256:c9c77f5b9820832cbc7b88d16df406ac6e75fee5a9077e5437db0c54e5ff33e3
+    outputs:
+      image:
+        description: The API image, by digest
+        value: ${{ jobs.build.outputs.image }}
+
+permissions: {}
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      # Reads packages from GitHub Packages, when github-packages-scope names a scope.
+      packages: read
+    outputs:
+      image: ${{ steps.image.outputs.image }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ inputs.role-arn }}
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: build-${{ github.run_id }}
+
+      - name: Find the image repository
+        id: repository
+        env:
+          TERRAFORM_IMAGE: ${{ inputs.terraform-image }}
+          INFRA_DIRECTORY: ${{ inputs.infra-directory }}
+          STATE_BUCKET: ${{ inputs.state-bucket }}
+          STATE_KEY: ${{ inputs.state-key }}
+          AWS_REGION_NAME: ${{ inputs.aws-region }}
+        run: |
+          terraform() {
+            docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp --env TF_IN_AUTOMATION=1 \
+              --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN --env AWS_REGION \
+              --volume "$PWD:/work" --workdir "/work/$INFRA_DIRECTORY" "$TERRAFORM_IMAGE" "$@"
+          }
+          terraform init -input=false -lockfile=readonly \
+            -backend-config="bucket=$STATE_BUCKET" -backend-config="key=$STATE_KEY" \
+            -backend-config="region=$AWS_REGION_NAME" > /dev/null
+          echo "url=$(terraform output -raw ecr_repository_url)" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push the API image
+        id: image
+        env:
+          REPOSITORY: ${{ steps.repository.outputs.url }}
+          CONTEXT: ${{ inputs.api-context }}
+          DOCKERFILE: ${{ inputs.api-dockerfile }}
+          TAG: ${{ github.sha }}
+        run: |
+          aws ecr get-login-password | docker login --username AWS --password-stdin "${REPOSITORY%%/*}"
+          # Tags are immutable, so a rerun of the same commit reuses the image already pushed.
+          if ! aws ecr describe-images --repository-name "${REPOSITORY#*/}" --image-ids "imageTag=$TAG" > /dev/null 2>&1; then
+            docker build --file "$DOCKERFILE" --tag "$REPOSITORY:$TAG" "$CONTEXT"
+            docker push "$REPOSITORY:$TAG"
+          fi
+          digest="$(aws ecr describe-images --repository-name "${REPOSITORY#*/}" --image-ids "imageTag=$TAG" \
+            --query 'imageDetails[0].imageDigest' --output text)"
+          echo "image=$REPOSITORY@$digest" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ inputs.web-directory }}/.nvmrc
+          cache: npm
+          cache-dependency-path: ${{ inputs.web-directory }}/package-lock.json
+          registry-url: ${{ inputs.github-packages-scope != '' && 'https://npm.pkg.github.com' || '' }}
+          scope: ${{ inputs.github-packages-scope }}
+
+      - name: Build the web interface
+        working-directory: ${{ inputs.web-directory }}
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Gather the release
+        env:
+          WEB_DIRECTORY: ${{ inputs.web-directory }}
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/release"
+          cp -R "$WEB_DIRECTORY/dist" "$RUNNER_TEMP/release/web"
+          # config.json is written for each environment at deployment.
+          rm -f "$RUNNER_TEMP/release/web/config.json"
+          printf '%s\n' "$IMAGE" > "$RUNNER_TEMP/release/image.txt"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release
+          path: ${{ runner.temp }}/release
+          retention-days: 90

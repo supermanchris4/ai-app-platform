@@ -7,6 +7,10 @@ name: Web checks
 on:
   workflow_call:
     inputs:
+      github-packages-scope:
+        description: An npm scope whose packages come from GitHub Packages, such as "@supermanchris4", read with the run's own token; empty for none
+        type: string
+        default: ""
       working-directory:
         description: The web interface's directory, holding package.json and package-lock.json
         type: string
@@ -44,6 +48,8 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: read
+      # Reads packages from GitHub Packages, when github-packages-scope names a scope.
+      packages: read
     defaults:
       run:
         working-directory: ${{ inputs.working-directory }}
@@ -57,9 +63,13 @@ jobs:
           node-version-file: ${{ inputs.working-directory }}/.nvmrc
           cache: npm
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
+          registry-url: ${{ inputs.github-packages-scope != '' && 'https://npm.pkg.github.com' || '' }}
+          scope: ${{ inputs.github-packages-scope }}
 
       - name: Install from the lock file
         run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
 
       - name: Lint and format check
         env:
