@@ -1,10 +1,16 @@
-# Releases one package when its version tag is pushed: api-v{version}, web-v{version} or
-# mock-idp-v{version} (README, "Releasing"). The tag must name a commit on main and the version the
-# package declares; the package's checks run again on the tagged commit before anything is published.
+# Releases one package when its version tag is pushed: api-v{version}, web-v{version},
+# mock-idp-v{version}, terraform-v{version} or workflows-v{version} (README, "Releasing"). The tag must
+# name a commit on main and the version the package declares; the package's checks run again on the
+# tagged commit before anything is published.
 #
 # - API platform: installed by uv from the tag; its wheel and source are attached to the release.
 # - Web platform: published to GitHub Packages.
 # - Mock identity provider: built, scanned with Trivy, and pushed to GitHub Container Registry.
+# - Terraform modules: used by their git source at the commit the tag names, which the release records.
+# - Reusable workflows: called at the tag's commit SHA, which the release records.
+#
+# The Terraform modules and the workflows declare no version in a file: their version is the latest
+# entry in their changelog.
 #
 # Each publishes with this run's own token; no secret is stored.
 name: Release
@@ -15,6 +21,8 @@ on:
       - "api-v*"
       - "web-v*"
       - "mock-idp-v*"
+      - "terraform-v*"
+      - "workflows-v*"
 
 permissions: {}
 
@@ -43,22 +51,31 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           declared() { python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["project"]["version"])' "$1"; }
+          latest() { grep -m1 -oP '^## \K\S+' "$1"; }
           case "$TAG" in
-            api-v*) package=api; version="${TAG#api-v}"; expected=$(declared packages/api/pyproject.toml) ;;
-            web-v*) package=web; version="${TAG#web-v}"; expected=$(node -p 'require("./packages/web/package.json").version') ;;
-            mock-idp-v*) package=mock-idp; version="${TAG#mock-idp-v}"; expected=$(declared packages/mock-idp/pyproject.toml) ;;
+            api-v*) package=api; declared_in=packages/api/pyproject.toml; changelog=packages/api/CHANGELOG.md
+              expected=$(declared "$declared_in") ;;
+            web-v*) package=web; declared_in=packages/web/package.json; changelog=packages/web/CHANGELOG.md
+              expected=$(node -p 'require("./packages/web/package.json").version') ;;
+            mock-idp-v*) package=mock-idp; declared_in=packages/mock-idp/pyproject.toml; changelog=packages/mock-idp/CHANGELOG.md
+              expected=$(declared "$declared_in") ;;
+            terraform-v*) package=terraform; changelog=packages/terraform/CHANGELOG.md; declared_in=$changelog
+              expected=$(latest "$changelog") ;;
+            workflows-v*) package=workflows; changelog=.github/workflows/CHANGELOG.md; declared_in=$changelog
+              expected=$(latest "$changelog") ;;
             *) echo "::error::$TAG is not a release tag"; exit 1 ;;
           esac
+          version="${TAG#"$package"-v}"
           if [ "$version" != "$expected" ]; then
-            echo "::error::$TAG names version $version, but packages/$package declares $expected"
+            echo "::error::$TAG names version $version, but $declared_in declares $expected"
             exit 1
           fi
           if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
             echo "::error::$TAG names a commit that is not on main"
             exit 1
           fi
-          if ! grep -q "^## $version\b" "packages/$package/CHANGELOG.md"; then
-            echo "::error::packages/$package/CHANGELOG.md has no entry for $version"
+          if ! grep -q "^## $version\b" "$changelog"; then
+            echo "::error::$changelog has no entry for $version"
             exit 1
           fi
           echo "package=$package" >> "$GITHUB_OUTPUT"
@@ -219,3 +236,58 @@ jobs:
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "Mock identity provider $VERSION" \
             --notes "Published as \`$IMAGE:$VERSION\`, digest \`$DIGEST\`. See [packages/mock-idp/CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/mock-idp/CHANGELOG.md) and [how to use it](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/mock-idp/README.md#using-it)."
+
+  terraform-checks:
+    name: Terraform modules
+    needs: version
+    if: needs.version.outputs.package == 'terraform'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/terraform-checks.yml
+    with:
+      root: packages/terraform
+      configurations: |
+        packages/terraform/modules/*
+      scan-path: packages/terraform
+
+  terraform-release:
+    name: Release the Terraform modules
+    needs: [version, terraform-checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Terraform modules $VERSION" \
+            --notes "Use them at commit \`$GITHUB_SHA\` # $TAG. See [packages/terraform/CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/terraform/CHANGELOG.md) and [how to use them](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/terraform/README.md#using-a-module)."
+
+  workflows-checks:
+    name: Workflows
+    needs: version
+    if: needs.version.outputs.package == 'workflows'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/workflow-checks.yml
+
+  workflows-release:
+    name: Release the reusable workflows
+    needs: [version, workflows-checks]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Reusable workflows $VERSION" \
+            --notes "Call them at commit \`$GITHUB_SHA\` # $TAG. See [.github/workflows/CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/.github/workflows/CHANGELOG.md) and [how to call them](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/.github/workflows/README.md#calling-a-workflow)."
