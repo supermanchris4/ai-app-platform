@@ -48,6 +48,7 @@ A job that calls a reusable workflow cannot name a GitHub Environment itself, so
 | [`python-checks`](#python-checks) | Checks a Python project managed by uv: Ruff lint and format check, Pyright, and its tests (the template's 13-delivery-pipeline.md) |
 | [`web-checks`](#web-checks) | Checks a Node web interface: lint and format check, type check, unit tests and build, then its end-to-end journeys and accessibility checks against a stack started on the runner (the template's 13-delivery-pipeline.md) |
 | [`contract-check`](#contract-check) | Fails when the OpenAPI document generated from the API differs from the one committed beside the web client, or the client's generated types differ from that document (the template's 13-delivery-pipeline.md) |
+| [`traceability-check`](#traceability-check) | Fails when a requirement ID that a specification section or a test cites is not a requirement, when a test names no requirement it verifies, or when the committed requirements trace report is not current (the template's 13-delivery-pipeline.md) |
 | [`image-checks`](#image-checks) | Builds a container image and, when asked, scans it with Trivy, failing on high or critical vulnerabilities that have a fix (the template's 13-delivery-pipeline.md) |
 | [`security-checks`](#security-checks) | Secret, code and dependency scanning with open-source tools, run from their images pinned by digest (the template's 13-delivery-pipeline.md) |
 | [`terraform-checks`](#terraform-checks) | Checks Terraform: format, validation and tests with mocked providers for each configuration, then Trivy's misconfiguration scan (the template's 13-delivery-pipeline.md) |
@@ -102,6 +103,18 @@ Fails when the OpenAPI document generated from the API differs from the one comm
 | `api-directory` | Yes |  | The API's directory, holding pyproject.toml and uv.lock |
 | `web-directory` | Yes |  | The web client's directory, holding package.json and package-lock.json |
 | `command` | No | `npm run check-api` | The command, run from the web client's directory, that fails when the document or types differ |
+
+
+### traceability-check
+
+Fails when a requirement ID that a specification section or a test cites is not a requirement, when a test names no requirement it verifies, or when the committed requirements trace report is not current (the template's 13-delivery-pipeline.md). It runs `python -m ai_app_platform.traceability` from the API platform package at the version the API's `uv.lock` pins, so the API must use version 0.2.0 or later. `--write` regenerates the report locally.
+
+**Caller grants:** `contents: read`.
+
+| Input | Required | Default | Description |
+|---|---|---|---|
+| `api-directory` | Yes |  | The API's directory, holding pyproject.toml and the uv.lock that pins the API platform package |
+| `arguments` | No |  | Arguments for python -m ai_app_platform.traceability, such as --report or --tests; empty for its defaults |
 
 
 ### image-checks

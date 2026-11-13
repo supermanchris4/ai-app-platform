@@ -1,0 +1,49 @@
+# Fails when a requirement ID that a specification section or a test cites is not a requirement, when a
+# test names no requirement it verifies, or when the committed requirements trace report is not current
+# (the template's 13-delivery-pipeline.md). Reusable: it holds nothing of one application, and takes its
+# values as inputs. It runs the API platform package's traceability module, at the version the API's
+# uv.lock pins, from the repository root.
+name: Traceability check
+
+on:
+  workflow_call:
+    inputs:
+      api-directory:
+        description: The API's directory, holding pyproject.toml and the uv.lock that pins the API platform package
+        type: string
+        required: true
+      arguments:
+        description: Arguments for python -m ai_app_platform.traceability, such as --report or --tests; empty for its defaults
+        type: string
+        default: ""
+
+permissions: {}
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          working-directory: ${{ inputs.api-directory }}
+          enable-cache: true
+          cache-dependency-glob: ${{ inputs.api-directory }}/uv.lock
+
+      - name: Install the API from its lock file
+        working-directory: ${{ inputs.api-directory }}
+        run: uv sync --locked --no-dev
+
+      - name: Check
+        env:
+          API_DIRECTORY: ${{ inputs.api-directory }}
+          ARGUMENTS: ${{ inputs.arguments }}
+        # ARGUMENTS is split into words on purpose, so it can hold several arguments.
+        # shellcheck disable=SC2086
+        run: uv run --project "$API_DIRECTORY" --no-sync python -m ai_app_platform.traceability $ARGUMENTS
