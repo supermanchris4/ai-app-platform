@@ -63,3 +63,14 @@ jobs:
     with:
       context: packages/mock-idp
       dockerfile: packages/mock-idp/Dockerfile
+
+  terraform:
+    name: Terraform modules
+    permissions:
+      contents: read
+    uses: ./.github/workflows/terraform-checks.yml
+    with:
+      root: packages/terraform
+      configurations: |
+        packages/terraform/modules/*
+      scan-path: packages/terraform
