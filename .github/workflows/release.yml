@@ -3,7 +3,7 @@
 # package declares; the package's checks run again on the tagged commit before anything is published.
 #
 # - API platform: installed by uv from the tag; its wheel and source are attached to the release.
-# - Web platform: published to GitHub Packages as @supermanchris4/ai-app-platform-web.
+# - Web platform: published to GitHub Packages.
 # - Mock identity provider: built, scanned with Trivy, and pushed to GitHub Container Registry.
 #
 # Each publishes with this run's own token; no secret is stored.

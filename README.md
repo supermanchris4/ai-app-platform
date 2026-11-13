@@ -1,8 +1,8 @@
 # ai-app-platform
 
-The shared platform code for applications built from the [AI application template](https://github.com/supermanchris4/ai-app-template), following the [AI application standard](https://github.com/supermanchris4/ai-app-standard): what every application needs and none should write again.
+The shared platform code for applications built from the AI application template (`ai-app-template`), following the AI application standard (`ai-app-standard`): what every application needs and none should write again.
 
-Applications install the packages by version tag. The code was built first inside the first application, identity-spine, and moved here once its boundaries were settled (the standard's work plan, Feature F03.2).
+Applications install the packages by version tag. The code was built first inside the first application built to the standard, and moved here once its boundaries were settled (the standard's work plan, Feature F03.2).
 
 ## Packages
 
