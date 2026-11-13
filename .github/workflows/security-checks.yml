@@ -1,5 +1,5 @@
 # Secret, code and dependency scanning with open-source tools, run from their images pinned by
-# digest (specs/13-delivery-pipeline.md#pull-request-checks; delivery plan decision 6). Reusable: it
+# digest (the template's 13-delivery-pipeline.md). Reusable: it
 # holds nothing of one application, and takes its values as inputs.
 name: Security checks
 

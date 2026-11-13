@@ -113,6 +113,7 @@ jobs:
     if: needs.version.outputs.package == 'web'
     permissions:
       contents: read
+      packages: read
     uses: ./.github/workflows/web-checks.yml
     with:
       working-directory: packages/web

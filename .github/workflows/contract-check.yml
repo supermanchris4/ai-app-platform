@@ -1,0 +1,70 @@
+# Fails when the OpenAPI document generated from the API differs from the one committed beside the
+# web client, or the client's generated types differ from that document
+# (the template's 13-delivery-pipeline.md). Reusable: it holds nothing of one application,
+# and takes its values as inputs.
+name: Contract check
+
+on:
+  workflow_call:
+    inputs:
+      github-packages-scope:
+        description: An npm scope whose packages come from GitHub Packages, such as "@supermanchris4", read with the run's own token; empty for none
+        type: string
+        default: ""
+      api-directory:
+        description: The API's directory, holding pyproject.toml and uv.lock
+        type: string
+        required: true
+      web-directory:
+        description: The web client's directory, holding package.json and package-lock.json
+        type: string
+        required: true
+      command:
+        description: The command, run from the web client's directory, that fails when the document or types differ
+        type: string
+        default: npm run check-api
+
+permissions: {}
+
+jobs:
+  check:
+    name: Check
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # Reads packages from GitHub Packages, when github-packages-scope names a scope.
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        with:
+          working-directory: ${{ inputs.api-directory }}
+          enable-cache: true
+          cache-dependency-glob: ${{ inputs.api-directory }}/uv.lock
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: ${{ inputs.web-directory }}/.nvmrc
+          cache: npm
+          cache-dependency-path: ${{ inputs.web-directory }}/package-lock.json
+          registry-url: ${{ inputs.github-packages-scope != '' && 'https://npm.pkg.github.com' || '' }}
+          scope: ${{ inputs.github-packages-scope }}
+
+      - name: Install the API from its lock file
+        working-directory: ${{ inputs.api-directory }}
+        run: uv sync --locked
+
+      - name: Install the web client from its lock file
+        working-directory: ${{ inputs.web-directory }}
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ github.token }}
+
+      - name: Compare
+        working-directory: ${{ inputs.web-directory }}
+        env:
+          COMMAND: ${{ inputs.command }}
+        run: bash -c "$COMMAND"

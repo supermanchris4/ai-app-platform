@@ -1,0 +1,32 @@
+# Checks GitHub Actions workflows with actionlint: syntax, expressions, inputs and outputs of reusable
+# workflows, permissions, and the shell in each run step, with shellcheck (the template's
+# 13-delivery-pipeline.md). Run from its image pinned by digest. Reusable: it holds nothing of one
+# application, and takes its values as inputs.
+name: Workflow checks
+
+on:
+  workflow_call:
+    inputs:
+      actionlint-image:
+        description: The actionlint image, pinned by digest
+        type: string
+        # actionlint 1.7.12, which includes shellcheck.
+        default: rhysd/actionlint:1.7.12@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667
+
+permissions: {}
+
+jobs:
+  checks:
+    name: Checks
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: actionlint
+        env:
+          ACTIONLINT_IMAGE: ${{ inputs.actionlint-image }}
+        run: docker run --rm --volume "$PWD:/repo:ro" --workdir /repo "$ACTIONLINT_IMAGE" -color

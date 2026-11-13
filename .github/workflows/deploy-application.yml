@@ -1,0 +1,202 @@
+# Deploys a build to one environment (the template's 13-delivery-pipeline.md): copies
+# the image into the environment's repository if it is not there, registers new revisions of every
+# task definition with the image and the application's settings, initialises the database users and
+# runs the migrations, updates the API service, uploads the web build, and checks the health endpoint
+# through CloudFront. Reusable: it holds nothing of one application, and takes its values as inputs.
+name: Deploy application
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: The environment deployed to
+        type: string
+        required: true
+      infra-directory:
+        description: The root Terraform configuration, whose outputs name the environment's resources
+        type: string
+        required: true
+      aws-region:
+        description: The environment's region
+        type: string
+        required: true
+      role-arn:
+        description: The deploy role to assume through OIDC
+        type: string
+        required: true
+      state-bucket:
+        description: The Terraform state bucket
+        type: string
+        required: true
+      state-key:
+        description: The environment's state file in the bucket
+        type: string
+        required: true
+      build-run-id:
+        description: The run that built the release to deploy; empty for this run
+        type: string
+        default: ""
+      app-settings-json:
+        description: The application's settings for this environment, as a JSON object of names and values; none is secret
+        type: string
+        required: true
+      health-path:
+        description: The path checked through CloudFront after deploying
+        type: string
+        default: /api/health
+      terraform-image:
+        description: The Terraform image, pinned by digest
+        type: string
+        default: hashicorp/terraform:1.16.7@sha256:c9c77f5b9820832cbc7b88d16df406ac6e75fee5a9077e5437db0c54e5ff33e3
+
+permissions: {}
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: release
+          path: ${{ runner.temp }}/release
+          run-id: ${{ inputs.build-run-id || github.run_id }}
+          github-token: ${{ github.token }}
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ inputs.role-arn }}
+          aws-region: ${{ inputs.aws-region }}
+          role-session-name: deploy-${{ inputs.environment }}-${{ github.run_id }}
+
+      - name: Read the environment's resources
+        env:
+          TERRAFORM_IMAGE: ${{ inputs.terraform-image }}
+          INFRA_DIRECTORY: ${{ inputs.infra-directory }}
+          STATE_BUCKET: ${{ inputs.state-bucket }}
+          STATE_KEY: ${{ inputs.state-key }}
+          AWS_REGION_NAME: ${{ inputs.aws-region }}
+        run: |
+          terraform() {
+            docker run --rm --user "$(id -u):$(id -g)" --env HOME=/tmp --env TF_IN_AUTOMATION=1 \
+              --env AWS_ACCESS_KEY_ID --env AWS_SECRET_ACCESS_KEY --env AWS_SESSION_TOKEN --env AWS_REGION \
+              --volume "$PWD:/work" --workdir "/work/$INFRA_DIRECTORY" "$TERRAFORM_IMAGE" "$@"
+          }
+          terraform init -input=false -lockfile=readonly \
+            -backend-config="bucket=$STATE_BUCKET" -backend-config="key=$STATE_KEY" \
+            -backend-config="region=$AWS_REGION_NAME" > /dev/null
+          terraform output -json > "$RUNNER_TEMP/outputs.json"
+
+      - name: Put the image in the environment's repository
+        run: |
+          source_image="$(cat "$RUNNER_TEMP/release/image.txt")"
+          repository="$(jq -r '.ecr_repository_url.value' "$RUNNER_TEMP/outputs.json")"
+          digest="${source_image#*@}"
+          if [ "${source_image%@*}" != "$repository" ]; then
+            # Another account's build: copied unchanged, so the digest shows it is the same build.
+            aws ecr get-login-password | docker login --username AWS --password-stdin "${source_image%%/*}"
+            aws ecr get-login-password | docker login --username AWS --password-stdin "${repository%%/*}"
+            docker pull "$source_image"
+            docker tag "$source_image" "$repository:${GITHUB_SHA}"
+            docker push "$repository:${GITHUB_SHA}"
+          fi
+          echo "IMAGE=$repository@$digest" >> "$GITHUB_ENV"
+
+      - name: Register the task definitions
+        env:
+          APP_SETTINGS_JSON: ${{ inputs.app-settings-json }}
+        run: |
+          outputs="$RUNNER_TEMP/outputs.json"
+          settings="$(jq -c --arg version "$GITHUB_SHA" '. + {APP_VERSION: $version}' <<< "$APP_SETTINGS_JSON")"
+          # Each revision starts from the latest one, keeps its settings from the infrastructure, takes
+          # the build's image and, except for the database initialisation, the application's settings.
+          register() {
+            local family="$1" with_settings="$2"
+            aws ecs describe-task-definition --task-definition "$family" --query taskDefinition --output json \
+              | jq --arg image "$IMAGE" --argjson settings "$settings" --argjson with_settings "$with_settings" '
+                  {family, taskRoleArn, executionRoleArn, networkMode, requiresCompatibilities, cpu, memory, runtimePlatform,
+                   containerDefinitions: [.containerDefinitions[] | .image = $image
+                     | if $with_settings then
+                         .environment = ([(.environment // [])[] | {(.name): .value}] | add // {} | . + $settings
+                           | to_entries | map({name: .key, value: (.value | tostring)}))
+                       else . end]}' \
+              > "$RUNNER_TEMP/$family.json"
+            aws ecs register-task-definition --cli-input-json "file://$RUNNER_TEMP/$family.json" \
+              --query taskDefinition.taskDefinitionArn --output text
+          }
+          {
+            echo "API_TASK=$(register "$(jq -r '.api_task_family.value' "$outputs")" true)"
+            echo "MIGRATION_TASK=$(register "$(jq -r '.migration_task_family.value' "$outputs")" true)"
+            echo "INIT_TASK=$(register "$(jq -r '.database_init_task_family.value' "$outputs")" false)"
+          } >> "$GITHUB_ENV"
+          for family in $(jq -r '.job_task_families.value[]' "$outputs"); do
+            register "$family" true > /dev/null
+          done
+
+      - name: Initialise the database users and migrate
+        run: |
+          outputs="$RUNNER_TEMP/outputs.json"
+          cluster="$(jq -r '.ecs_cluster_name.value' "$outputs")"
+          network="awsvpcConfiguration={subnets=[$(jq -r '.task_subnet_ids.value | join(",")' "$outputs")],securityGroups=[$(jq -r '.task_security_group_id.value' "$outputs")],assignPublicIp=DISABLED}"
+          # Runs a one-off task to the end, and fails unless it exits with 0.
+          run_task() {
+            local task
+            task="$(aws ecs run-task --cluster "$cluster" --task-definition "$1" --launch-type FARGATE \
+              --network-configuration "$network" --query 'tasks[0].taskArn' --output text)"
+            aws ecs wait tasks-stopped --cluster "$cluster" --tasks "$task"
+            code="$(aws ecs describe-tasks --cluster "$cluster" --tasks "$task" --query 'tasks[0].containers[0].exitCode' --output text)"
+            if [ "$code" != "0" ]; then
+              echo "::error::$1 stopped with exit code $code"
+              exit 1
+            fi
+          }
+          # Safe to run every time: it changes nothing once the users and their secrets exist.
+          run_task "$INIT_TASK"
+          run_task "$MIGRATION_TASK"
+
+      - name: Update the API service
+        run: |
+          outputs="$RUNNER_TEMP/outputs.json"
+          cluster="$(jq -r '.ecs_cluster_name.value' "$outputs")"
+          service="$(jq -r '.api_service_name.value' "$outputs")"
+          aws ecs update-service --cluster "$cluster" --service "$service" --task-definition "$API_TASK" > /dev/null
+          aws ecs wait services-stable --cluster "$cluster" --services "$service"
+          # The circuit breaker rolls a failed deployment back, which also ends as stable.
+          state="$(aws ecs describe-services --cluster "$cluster" --services "$service" \
+            --query "services[0].deployments[?taskDefinition=='$API_TASK'].rolloutState | [0]" --output text)"
+          if [ "$state" != "COMPLETED" ]; then
+            echo "::error::The API deployment did not complete ($state); the circuit breaker rolled it back"
+            exit 1
+          fi
+
+      - name: Upload the web build
+        run: |
+          outputs="$RUNNER_TEMP/outputs.json"
+          bucket="$(jq -r '.web_bucket_name.value' "$outputs")"
+          distribution="$(jq -r '.cloudfront_distribution_id.value' "$outputs")"
+          web="$RUNNER_TEMP/release/web"
+          jq -n --arg environment "$ENVIRONMENT" '{environment: $environment}' > "$web/config.json"
+          # Hashed assets first, so a page never names one that is not there yet; old ones are kept for
+          # pages already open. Then the other files, and index.html and config.json last.
+          aws s3 sync "$web/assets" "s3://$bucket/assets" --cache-control "public, max-age=31536000, immutable"
+          aws s3 sync "$web" "s3://$bucket" --exclude "assets/*" --exclude "index.html" --exclude "config.json" --cache-control "no-cache"
+          aws s3 cp "$web/index.html" "s3://$bucket/index.html" --cache-control "no-cache"
+          aws s3 cp "$web/config.json" "s3://$bucket/config.json" --cache-control "no-cache"
+          aws cloudfront create-invalidation --distribution-id "$distribution" --paths "/index.html" "/config.json" > /dev/null
+
+      - name: Check the health endpoint through CloudFront
+        env:
+          HEALTH_PATH: ${{ inputs.health-path }}
+        run: |
+          url="$(jq -r '.public_url.value' "$RUNNER_TEMP/outputs.json")$HEALTH_PATH"
+          curl --fail --silent --show-error --retry 10 --retry-delay 15 --retry-all-errors "$url"
