@@ -6,11 +6,13 @@ A private S3 bucket: encrypted, public access blocked, owner-enforced, reachable
 
 ```hcl
 module "private_bucket" {
-  source = "git::https://github.com/supermanchris4/ai-app-platform.git//packages/terraform/modules/private-bucket?ref=terraform-v{version}"
+  source = "git::https://github.com/{platform-owner}/ai-app-platform.git//packages/terraform/modules/private-bucket?ref={commit SHA}" # terraform-v{version}
 
   # The required inputs below
 }
 ```
+
+The commit is the one a release tag names, taken as [Using a module](../../README.md#using-a-module) describes.
 
 Its tests, in `tests/`, run with `terraform test` against mocked providers.
 

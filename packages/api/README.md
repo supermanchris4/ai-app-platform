@@ -20,6 +20,8 @@ The platform code every FastAPI application built from the AI application templa
 
 ## Installing it
 
+`{platform-owner}` stands for the owner of this repository, in lower case ([README](../../README.md#packages)).
+
 Each release is a git tag, `api-v{version}`, on this public repository, so installing needs no credential. In the application's `pyproject.toml`:
 
 ```toml
@@ -27,7 +29,7 @@ Each release is a git tag, `api-v{version}`, on this public repository, so insta
 dependencies = ["ai-app-platform"]
 
 [tool.uv.sources]
-ai-app-platform = { git = "https://github.com/supermanchris4/ai-app-platform", tag = "api-v0.1.1", subdirectory = "packages/api" }
+ai-app-platform = { git = "https://github.com/{platform-owner}/ai-app-platform", tag = "api-v0.1.1", subdirectory = "packages/api" }
 ```
 
 `uv lock` records the tag's commit, so development, the pull request checks and the image all install the same code. uv fetches git sources with `git`, so an image's build stage installs it; the runtime stage, which copies only the virtual environment, does not need it.

@@ -6,11 +6,13 @@ An AWS WAF web ACL for a CloudFront distribution (the template's 12-aws-deployme
 
 ```hcl
 module "web_acl" {
-  source = "git::https://github.com/supermanchris4/ai-app-platform.git//packages/terraform/modules/web-acl?ref=terraform-v{version}"
+  source = "git::https://github.com/{platform-owner}/ai-app-platform.git//packages/terraform/modules/web-acl?ref={commit SHA}" # terraform-v{version}
 
   # The required inputs below
 }
 ```
+
+The commit is the one a release tag names, taken as [Using a module](../../README.md#using-a-module) describes.
 
 ## Inputs
 
