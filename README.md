@@ -6,11 +6,13 @@ Applications install the packages by version tag. The code was built first insid
 
 ## Packages
 
+`{platform-owner}` stands for the GitHub account or organisation that owns this repository, in lower case: GitHub Packages and GitHub Container Registry name a package after its owner, so a fork publishes under its own. The release workflow takes the owner from the repository; the one file that names it is `packages/web/package.json`, whose package name a fork changes.
+
 | Package | Folder | What it is | Released as |
 |---|---|---|---|
 | API platform | `packages/api` | Settings, logging, database access, middleware, health, sign-in and access, and audit, for a FastAPI application | A git tag, `api-v{version}`, installed by uv from the tag and the folder |
-| Web platform | `packages/web` | The web shell's platform code for a React application: the API client (CSRF token and correlation ID on every request), the session provider and route guard, sign-in navigation, the error notice, the environment banner, `config.json`, local dates and navigation links | `@supermanchris4/ai-app-platform-web` in GitHub Packages, tag `web-v{version}` |
-| Mock identity provider | `packages/mock-idp` | A local OpenID Connect provider standing in for the internal issuer, configured with each application's roles and synthetic people | `ghcr.io/supermanchris4/ai-app-platform-mock-idp`, tag `mock-idp-v{version}` |
+| Web platform | `packages/web` | The web shell's platform code for a React application: the API client (CSRF token and correlation ID on every request), the session provider and route guard, sign-in navigation, the error notice, the environment banner, `config.json`, local dates and navigation links | `@{platform-owner}/ai-app-platform-web` in GitHub Packages, tag `web-v{version}` |
+| Mock identity provider | `packages/mock-idp` | A local OpenID Connect provider standing in for the internal issuer, configured with each application's roles and synthetic people | `ghcr.io/{platform-owner}/ai-app-platform-mock-idp`, tag `mock-idp-v{version}` |
 | Terraform modules | `packages/terraform` | The Terraform modules an application's infrastructure is built from, one per concern in the template's `12-aws-deployment.md` | A git tag, `terraform-v{version}`, used as each module's git source at the commit it names |
 | Reusable workflows | `.github/workflows` | The pull request checks, Terraform checks, plan and apply, and the application build and deployment, called by an application's pipelines | A git tag, `workflows-v{version}`, called at the commit it names |
 

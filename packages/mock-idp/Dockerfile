@@ -12,8 +12,8 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --frozen --no-dev
 
 FROM python:3.13-slim-bookworm@sha256:a5a7017efc5969e00ae2b91c8eb0631049a569652aa4ffc4501769049ae45c72
-LABEL org.opencontainers.image.source="https://github.com/supermanchris4/ai-app-platform" \
-      org.opencontainers.image.description="Local mock OpenID Connect provider. Never deployed." \
+# The release adds org.opencontainers.image.source, naming the repository it is built from.
+LABEL org.opencontainers.image.description="Local mock OpenID Connect provider. Never deployed." \
       org.opencontainers.image.licenses="Apache-2.0"
 # The provider needs no package installer at run time, and pip's own vendored packages are scanned
 # like any other, so it is removed.

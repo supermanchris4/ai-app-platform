@@ -1,6 +1,6 @@
 # ai-app-platform: the web platform
 
-The platform code every React web interface built from the AI application template needs, as one npm package, `@supermanchris4/ai-app-platform-web`. It implements the browser's side of the template's `40-ui.md` and `50-auth.md`, and imports nothing of any application's.
+The platform code every React web interface built from the AI application template needs, as one npm package, `@{platform-owner}/ai-app-platform-web`. It implements the browser's side of the template's `40-ui.md` and `50-auth.md`, and imports nothing of any application's.
 
 | Export                                                                  | What it provides                                                                                                                                                                                                                                   |
 | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -17,20 +17,22 @@ React and React Router are peer dependencies: the application provides them, so 
 
 ## Installing it
 
+`{platform-owner}` stands for the owner of this repository, in lower case ([README](../../README.md#packages)).
+
 The package is in GitHub Packages, whose npm registry needs a token to read even a public package. No token is ever written into the application's repository.
 
 1. In the application's web folder, an `.npmrc` that says where the scope's packages come from:
 
    ```ini
-   @supermanchris4:registry=https://npm.pkg.github.com
+   @{platform-owner}:registry=https://npm.pkg.github.com
    ```
 
-2. Then `npm install @supermanchris4/ai-app-platform-web@0.1.0 react react-router`.
+2. Then `npm install @{platform-owner}/ai-app-platform-web@0.1.0 react react-router`.
 
 **On a developer's machine,** sign in to the registry once with a personal access token (classic) that has only the `read:packages` scope. npm stores it in the user's own `~/.npmrc`, outside the repository:
 
 ```bash
-npm login --scope=@supermanchris4 --auth-type=legacy --registry=https://npm.pkg.github.com
+npm login --scope=@{platform-owner} --auth-type=legacy --registry=https://npm.pkg.github.com
 ```
 
 **In the application's pipelines,** the run's own token reads the package. The job needs `packages: read`, and `actions/setup-node` writes the registry setting:
@@ -44,7 +46,7 @@ steps:
     with:
       node-version-file: apps/web/.nvmrc
       registry-url: https://npm.pkg.github.com
-      scope: "@supermanchris4"
+      scope: "@{platform-owner}"
   - run: npm ci
     env:
       NODE_AUTH_TOKEN: ${{ github.token }}
@@ -58,7 +60,7 @@ An application:
 
 1. Wraps its routes in `SessionProvider`, and shows `EnvironmentBanner` with the environment from `loadConfig()`.
 2. Calls the API through `platformFetch` or `apiRequest`, never `fetch` directly.
-3. Styles the components with Tailwind CSS. The components use the template's theme colours (`accent`, `destructive`, `muted-foreground`), and the application's Tailwind `content` setting includes `node_modules/@supermanchris4/ai-app-platform-web/dist/**/*.js`, so their classes are generated.
+3. Styles the components with Tailwind CSS. The components use the template's theme colours (`accent`, `destructive`, `muted-foreground`), and the application's Tailwind `content` setting includes `node_modules/@{platform-owner}/ai-app-platform-web/dist/**/*.js`, so their classes are generated.
 
 ## Developing
 

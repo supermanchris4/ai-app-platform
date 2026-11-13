@@ -6,11 +6,13 @@ The modules need Terraform 1.16 or later and the AWS provider 6.70 or later; the
 
 ## Using a module
 
+`{platform-owner}` stands for the owner of this repository, in lower case ([README](../../README.md#packages)).
+
 Each release is a git tag, `terraform-v{version}`, on this public repository, so Terraform fetches a module with no credential. The application's root names each module by its git source at the commit the release tag names, with the tag in a comment, as for the reusable workflows and every action:
 
 ```hcl
 module "database" {
-  source = "git::https://github.com/supermanchris4/ai-app-platform.git//packages/terraform/modules/rds-postgres?ref={commit SHA}" # terraform-v{version}
+  source = "git::https://github.com/{platform-owner}/ai-app-platform.git//packages/terraform/modules/rds-postgres?ref={commit SHA}" # terraform-v{version}
   # ...
 }
 ```
@@ -20,7 +22,7 @@ Terraform's lock file records providers, not modules, so the `ref` alone fixes t
 Take the commit from the release's notes, or from this repository:
 
 ```bash
-git ls-remote https://github.com/supermanchris4/ai-app-platform 'refs/tags/terraform-v0.1.0^{}' refs/tags/terraform-v0.1.0
+git ls-remote https://github.com/{platform-owner}/ai-app-platform 'refs/tags/terraform-v0.1.0^{}' refs/tags/terraform-v0.1.0
 ```
 
 Use the line ending `^{}` if there is one (an annotated tag), and otherwise the other line. Never take a commit from a link, a pull request or a fork: GitHub serves a commit pushed to any fork of a public repository through this repository's address too, so only the release tag shows that a commit is a release.

@@ -150,11 +150,24 @@ jobs:
         with:
           persist-credentials: false
 
+      # GitHub Packages publishes an npm package only under its owner's scope, in lower case.
+      - name: Match the package's scope to this repository's owner
+        id: package
+        run: |
+          scope="@${GITHUB_REPOSITORY_OWNER,,}"
+          name=$(node -p 'require("./package.json").name')
+          if [ "${name%%/*}" != "$scope" ]; then
+            echo "::error::package.json names $name, but this repository's owner publishes only under $scope"
+            exit 1
+          fi
+          echo "scope=$scope" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: packages/web/.nvmrc
           registry-url: https://npm.pkg.github.com
-          scope: "@supermanchris4"
+          scope: ${{ steps.package.outputs.scope }}
 
       - name: Install from the lock file
         run: npm ci --ignore-scripts
@@ -172,10 +185,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.version.outputs.version }}
+          PACKAGE: ${{ steps.package.outputs.name }}
         run: |
           gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --verify-tag \
             --title "Web platform $VERSION" \
-            --notes "Published as \`@supermanchris4/ai-app-platform-web@$VERSION\` in GitHub Packages. See [packages/web/CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/web/CHANGELOG.md) and [how to install it](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/web/README.md#installing-it)."
+            --notes "Published as \`$PACKAGE@$VERSION\` in GitHub Packages. See [packages/web/CHANGELOG.md](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/web/CHANGELOG.md) and [how to install it](https://github.com/$GITHUB_REPOSITORY/blob/$TAG/packages/web/README.md#installing-it)."
 
   mock-idp-checks:
     name: Mock identity provider
@@ -195,7 +209,6 @@ jobs:
       contents: write
       packages: write
     env:
-      IMAGE: ghcr.io/supermanchris4/ai-app-platform-mock-idp
       # Trivy 0.76.1, as in image-checks.yml.
       TRIVY_IMAGE: aquasec/trivy:0.76.1@sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c
     steps:
@@ -203,10 +216,16 @@ jobs:
         with:
           persist-credentials: false
 
+      # The image is named after this repository's owner, in lower case as the registry requires,
+      # and its source label links it to this repository.
       - name: Build
         env:
           VERSION: ${{ needs.version.outputs.version }}
-        run: docker build --tag "$IMAGE:$VERSION" packages/mock-idp
+        run: |
+          IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/ai-app-platform-mock-idp"
+          echo "IMAGE=$IMAGE" >> "$GITHUB_ENV"
+          docker build --tag "$IMAGE:$VERSION" \
+            --label "org.opencontainers.image.source=$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" packages/mock-idp
 
       - name: Scan
         env:

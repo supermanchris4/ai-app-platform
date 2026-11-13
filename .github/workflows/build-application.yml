@@ -9,7 +9,7 @@ on:
   workflow_call:
     inputs:
       github-packages-scope:
-        description: An npm scope whose packages come from GitHub Packages, such as "@supermanchris4", read with the run's own token; empty for none
+        description: An npm scope whose packages come from GitHub Packages, such as "@example", read with the run's own token; empty for none
         type: string
         default: ""
       environment:

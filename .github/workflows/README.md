@@ -6,6 +6,8 @@ The other files here, `ci.yml` and `release.yml`, are this repository's own pipe
 
 ## Calling a workflow
 
+`{platform-owner}` stands for the owner of this repository, in lower case ([README](../../README.md#packages)).
+
 An application calls a workflow at a release, pinned by the commit SHA the release tag names, with the tag in a comment, as the template requires of every third-party action:
 
 ```yaml
@@ -14,7 +16,7 @@ jobs:
     name: API
     permissions:
       contents: read
-    uses: supermanchris4/ai-app-platform/.github/workflows/python-checks.yml@{commit SHA} # workflows-v{version}
+    uses: {platform-owner}/ai-app-platform/.github/workflows/python-checks.yml@{commit SHA} # workflows-v{version}
     with:
       working-directory: apps/api
 ```
@@ -24,7 +26,7 @@ A reusable workflow's jobs can have no more permission than its caller grants, s
 Each release is a git tag, `workflows-v{version}`, and its GitHub release names the commit the tag points to. Every call in an application uses the same release. Take the commit from the release's notes, or from this repository:
 
 ```bash
-git ls-remote https://github.com/supermanchris4/ai-app-platform 'refs/tags/workflows-v0.1.0^{}' refs/tags/workflows-v0.1.0
+git ls-remote https://github.com/{platform-owner}/ai-app-platform 'refs/tags/workflows-v0.1.0^{}' refs/tags/workflows-v0.1.0
 ```
 
 Use the line ending `^{}` if there is one (an annotated tag), and otherwise the other line. Never take a commit from a link, a pull request or a fork: GitHub serves a commit pushed to any fork of a public repository through this repository's address too, so only the release tag shows that a commit is a release.
@@ -70,7 +72,7 @@ Checks a Node web interface: lint and format check, type check, unit tests and b
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `github-packages-scope` | No |  | An npm scope whose packages come from GitHub Packages, such as "@supermanchris4", read with the run's own token; empty for none |
+| `github-packages-scope` | No |  | An npm scope whose packages come from GitHub Packages, such as "@example", read with the run's own token; empty for none |
 | `working-directory` | Yes |  | The web interface's directory, holding package.json and package-lock.json |
 | `lint-command` | No | `npm run lint` | The command that lints and checks formatting |
 | `typecheck-command` | No | `npm run typecheck` | The command that type checks |
@@ -88,7 +90,7 @@ Fails when the OpenAPI document generated from the API differs from the one comm
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `github-packages-scope` | No |  | An npm scope whose packages come from GitHub Packages, such as "@supermanchris4", read with the run's own token; empty for none |
+| `github-packages-scope` | No |  | An npm scope whose packages come from GitHub Packages, such as "@example", read with the run's own token; empty for none |
 | `api-directory` | Yes |  | The API's directory, holding pyproject.toml and uv.lock |
 | `web-directory` | Yes |  | The web client's directory, holding package.json and package-lock.json |
 | `command` | No | `npm run check-api` | The command, run from the web client's directory, that fails when the document or types differ |
@@ -183,7 +185,7 @@ Builds the application once (the template's 13-delivery-pipeline.md): the API im
 
 | Input | Required | Default | Description |
 |---|---|---|---|
-| `github-packages-scope` | No |  | An npm scope whose packages come from GitHub Packages, such as "@supermanchris4", read with the run's own token; empty for none |
+| `github-packages-scope` | No |  | An npm scope whose packages come from GitHub Packages, such as "@example", read with the run's own token; empty for none |
 | `environment` | Yes |  | The environment whose image repository receives the build |
 | `infra-directory` | Yes |  | The root Terraform configuration, whose ecr_repository_url output names the repository |
 | `aws-region` | Yes |  | The environment's region |
