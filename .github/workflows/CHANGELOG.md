@@ -2,6 +2,10 @@
 
 Each version's changes to the reusable workflows that an application would notice. A breaking change is a new major version.
 
+## 0.2.0
+
+- `terraform-plan`, `terraform-apply`, `build-application` and `deploy-application` take the optional `github-environment` input, the GitHub Environment their job runs in, for its protection rules and the role's OIDC trust ([GitHub Environments](README.md#github-environments)). It defaults to empty, no environment, as before, so a caller that does not set it is unaffected.
+
 ## 0.1.0
 
 The first release: the workflows the first application built, moved here unchanged apart from their header comments (the standard's work plan, Feature F03.3), with these differences from the first application's copies:

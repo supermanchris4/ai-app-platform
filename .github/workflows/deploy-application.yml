@@ -12,6 +12,10 @@ on:
         description: The environment deployed to
         type: string
         required: true
+      github-environment:
+        description: The GitHub Environment the job runs in, for its protection rules and the role's OIDC trust; empty for none, on a plan without environments
+        type: string
+        default: ""
       infra-directory:
         description: The root Terraform configuration, whose outputs name the environment's resources
         type: string
@@ -55,6 +59,7 @@ jobs:
   deploy:
     name: Deploy
     runs-on: ubuntu-24.04
+    environment: ${{ inputs.github-environment }}
     permissions:
       actions: read
       contents: read
