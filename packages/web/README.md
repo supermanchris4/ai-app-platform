@@ -29,10 +29,16 @@ The package is in GitHub Packages, whose npm registry needs a token to read even
 
 2. Then `npm install @{platform-owner}/ai-app-platform-web@0.1.0 react react-router`.
 
-**On a developer's machine,** sign in to the registry once with a personal access token (classic) that has only the `read:packages` scope. npm stores it in the user's own `~/.npmrc`, outside the repository:
+**On a developer's machine,** npm reads a personal access token (classic) that has only the `read:packages` scope from an environment variable, so the token is never written to a file. The user's own `~/.npmrc` refers to the variable:
+
+```ini
+//npm.pkg.github.com/:_authToken=${GITHUB_PACKAGES_TOKEN}
+```
+
+The token itself is held in the operating system's credential store and set in the variable only for the command that needs it, as the standard's developer setup guide describes (`docs/developer-setup.md` in `ai-app-standard`, "Access the platform packages"):
 
 ```bash
-npm login --scope=@{platform-owner} --auth-type=legacy --registry=https://npm.pkg.github.com
+GITHUB_PACKAGES_TOKEN=$(gh_packages_token) npm --prefix apps/web ci
 ```
 
 **In the application's pipelines,** the run's own token reads the package. The job needs `packages: read`, and `actions/setup-node` writes the registry setting:
