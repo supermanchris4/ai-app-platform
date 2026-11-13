@@ -44,6 +44,7 @@ jobs:
         env:
           API_DIRECTORY: ${{ inputs.api-directory }}
           ARGUMENTS: ${{ inputs.arguments }}
-        # ARGUMENTS is split into words on purpose, so it can hold several arguments.
-        # shellcheck disable=SC2086
-        run: uv run --project "$API_DIRECTORY" --no-sync python -m ai_app_platform.traceability $ARGUMENTS
+        # ARGUMENTS can hold several arguments, so it is split into words first.
+        run: |
+          read -ra arguments <<< "$ARGUMENTS"
+          uv run --project "$API_DIRECTORY" --no-sync python -m ai_app_platform.traceability "${arguments[@]}"
