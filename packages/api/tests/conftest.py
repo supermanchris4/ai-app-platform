@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from ai_app_platform.auth.context import ActorType, AuthContext
 from ai_app_platform.auth.sessions import create_session
 from ai_app_platform.dependencies import get_db
-from ai_app_platform.migrations import create_platform_tables
+from ai_app_platform.migrations import add_platform_change_stamps, create_platform_tables
 from ai_app_platform.testing import TEST_ISSUER, TEST_SUBJECT
 
 ENTITY_TYPES = ["record", "item"]
@@ -45,6 +45,7 @@ def db_engine() -> Generator[Engine]:
         connection.execute(text("CREATE SCHEMA public"))
         with Operations.context(MigrationContext.configure(connection)):
             create_platform_tables(entity_types=ENTITY_TYPES)
+            add_platform_change_stamps()
     yield engine
     engine.dispose()
 

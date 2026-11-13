@@ -127,3 +127,26 @@ def test_an_audit_record_carries_the_callers_name_when_the_caller_acted(db_sessi
 
     assert own.actor_name == "Pat Example"
     assert other.actor_name is None
+
+
+def test_an_audit_record_holds_equal_change_stamps(db_session: Session) -> None:
+    insert_audit(db_session)
+    created, updated = db_session.execute(text("SELECT created_at, updated_at FROM audit_records")).one()
+    assert created == updated
+
+    record = AuditService().record(
+        db_session, entity_type="record", entity_id=uuid.uuid4(), action="created", actor_id="someone", actor_type="job"
+    )
+    db_session.flush()
+    db_session.refresh(record)
+    assert record.created_at == record.updated_at
+
+
+def test_changing_a_session_moves_its_last_changed_time(db_session: Session) -> None:
+    _, session = create_session(db_session, PERSON, SETTINGS, now=datetime.now(UTC) - timedelta(days=1))
+    created_at = session.created_at
+    assert session.updated_at == created_at
+    session.display_name = "Pat Renamed"
+    db_session.flush()
+    db_session.refresh(session)
+    assert session.updated_at > created_at

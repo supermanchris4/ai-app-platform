@@ -4,7 +4,9 @@ Migrations run as the migration user, `{prefix}_migrator`, which owns the schema
 creates a table calls `grant_runtime` for it, so the runtime user, `{prefix}_runtime`, can use it.
 
 The platform's own tables are created by the application's migrations, not the platform's: a new
-application's first migration calls `create_platform_tables`.
+application's first migration calls `create_platform_tables`, then each later version's helper in
+order (`add_platform_change_stamps`). An application already past its first migration calls a new
+version's helper from a new migration.
 """
 
 from collections.abc import Sequence
@@ -118,3 +120,22 @@ def create_platform_tables(entity_types: Sequence[str] | None = None) -> None:
         postgresql_where=sa.text("correlation_id IS NOT NULL"),
     )
     grant_runtime("auth_sessions", "audit_records")
+
+
+def add_platform_change_stamps() -> None:
+    """Version 2 of the platform's tables: `audit_records` gains `updated_at`, as every table has one.
+
+    The template's NFR-DAT-01: a record holds when it was created and when it was last changed, equal
+    until its first change. An audit record never changes, so its `updated_at` is its `created_at`.
+    Call from a migration's upgrade(), after `create_platform_tables`.
+    """
+    op.add_column(
+        "audit_records",
+        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+    )
+    op.execute("UPDATE audit_records SET updated_at = created_at")
+
+
+def drop_platform_change_stamps() -> None:
+    """Undo `add_platform_change_stamps`. Call from the same migration's downgrade()."""
+    op.drop_column("audit_records", "updated_at")
