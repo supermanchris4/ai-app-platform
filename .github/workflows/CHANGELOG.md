@@ -2,6 +2,10 @@
 
 Each version's changes to the reusable workflows that an application would notice. A breaking change is a new major version.
 
+## 0.3.2
+
+- `terraform-checks` leaves the modules Terraform downloaded into `.terraform` out of Trivy's misconfiguration scan (`--tf-exclude-downloaded-modules`). An application's modules are this repository's, scanned in its own checks; through a downloaded git source Trivy ignored their `#trivy:ignore` comments and failed on the reviewed exceptions in `permissions-boundary`. The scan still covers the application's own Terraform.
+
 ## 0.3.1
 
 - `terraform-checks` reuses the provider it downloaded first for every configuration, including modules without a lock file, instead of downloading it again for each one. A root configuration's committed lock file is still checked.
