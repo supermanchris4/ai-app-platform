@@ -148,7 +148,7 @@ Secret, code and dependency scanning with open-source tools, run from their imag
 
 ### terraform-checks
 
-Checks Terraform: format, validation and tests with mocked providers for each configuration, then Trivy's misconfiguration scan (the template's 13-delivery-pipeline.md). Nothing is planned against or applied to an AWS account, and no credentials are used.
+Checks Terraform: format, validation and tests with mocked providers for each configuration, then Trivy's misconfiguration scan (the template's 13-delivery-pipeline.md). The scan leaves out the modules Terraform downloaded into `.terraform`, which are this repository's and scanned in its own checks. Nothing is planned against or applied to an AWS account, and no credentials are used.
 
 **Caller grants:** `contents: read`.
 

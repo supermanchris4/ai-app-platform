@@ -93,5 +93,8 @@ jobs:
           while IFS= read -r dir; do
             [ -n "$dir" ] && args+=(--skip-dirs "/src/$dir")
           done <<< "$SKIP_DIRS"
+          # Modules Terraform downloaded into .terraform are excluded: an application's are this
+          # repository's, scanned in its own checks, where their reviewed #trivy:ignore comments
+          # apply. Through a downloaded git source Trivy does not apply those comments.
           docker run --rm --volume "$PWD/$SCAN_PATH:/src:ro" "$TRIVY_IMAGE" \
-            config --exit-code 1 "${args[@]}" /src
+            config --exit-code 1 --tf-exclude-downloaded-modules "${args[@]}" /src
