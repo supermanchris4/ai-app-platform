@@ -1,6 +1,7 @@
 # Dependabot proposes version updates as pull requests, which run the full CI checks before merge.
 # Each waits 7 days after a release before proposing it, so a malicious or broken release can be
 # withdrawn first; security updates are not delayed. Each package's ecosystem is added with the package.
+# Each entry groups its updates into one pull request a week.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -9,6 +10,9 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
 
   - package-ecosystem: pre-commit
     directory: /
@@ -16,6 +20,9 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      pre-commit-hooks:
+        patterns: ["*"]
 
   - package-ecosystem: uv
     directory: /packages/api
@@ -23,6 +30,9 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      api-dependencies:
+        patterns: ["*"]
 
   - package-ecosystem: npm
     directory: /packages/web
@@ -37,6 +47,9 @@ updates:
       # A TypeScript major is adopted on purpose, with the applications that use the package.
       - dependency-name: typescript
         update-types: ["version-update:semver-major"]
+    groups:
+      web-dependencies:
+        patterns: ["*"]
 
   - package-ecosystem: uv
     directory: /packages/mock-idp
@@ -44,6 +57,9 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    groups:
+      mock-idp-dependencies:
+        patterns: ["*"]
 
   - package-ecosystem: docker
     directory: /packages/mock-idp
@@ -51,3 +67,11 @@ updates:
       interval: weekly
     cooldown:
       default-days: 7
+    ignore:
+      # The Python version is the template's (3.13) and changes on purpose in every place that names
+      # it. Dependabot counts 3.13 to 3.15 as a minor update, so both minor and major are ignored.
+      - dependency-name: python
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      mock-idp-images:
+        patterns: ["*"]
